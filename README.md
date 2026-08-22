@@ -1,5 +1,17 @@
 # 🏈 League Dashboard
 
+**Live**: https://web-production-a7728.up.railway.app
+(ESPN league `997935701`, season 2026 — shows demo data until the worker's
+first sync lands.)
+
+Deployed infrastructure:
+
+| Piece | Where |
+|---|---|
+| Database | Supabase project `fantasy-football-dashboard` (`zzhngfdstaogqfglszlj`), schema applied |
+| Sync worker | Railway project `fantasy-football-dashboard`, service `sync-worker` (needs `SUPABASE_SERVICE_KEY` set) |
+| Frontend | Railway service `web` (moving to Vercel is optional: import the repo, root directory `web`) |
+
 One link for the whole league: standings, live matchups, waivers, power rankings,
 playoff odds, and auto-generated weekly recaps for your ESPN fantasy league —
 plus the stuff ESPN doesn't show you (luck analysis, all-play records, FAAB spend
