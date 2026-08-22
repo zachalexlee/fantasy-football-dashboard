@@ -244,12 +244,16 @@ class Sync:
             home_id = self.team_uuid.get(home.get("teamId"))
             if not home_id:
                 continue
+            # Keep keys identical to the boxscore-path rows above: PostgREST
+            # rejects bulk upserts whose objects have differing key sets.
             matchup_rows.append({
                 "league_id": self.league_row["id"],
                 "week": week,
                 "home_team_id": home_id,
                 "away_team_id": self.team_uuid.get(away.get("teamId")) if away else None,
                 "home_score": 0, "away_score": 0,
+                "home_projected": None, "away_projected": None,
+                "home_yet_to_play": None, "away_yet_to_play": None,
                 "is_playoff": e.get("playoffTierType", "NONE") != "NONE",
                 "is_final": False, "winner_id": None,
             })
