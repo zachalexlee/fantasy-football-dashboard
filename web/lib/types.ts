@@ -1,0 +1,110 @@
+export type League = {
+  id: string;
+  name: string;
+  season: number;
+  currentWeek: number;
+  finalWeek: number;
+  playoffTeamCount: number;
+  regularSeasonWeeks: number;
+  faabBudget: number | null;
+  syncedAt: string | null;
+};
+
+export type Team = {
+  id: string;
+  espnTeamId: number;
+  name: string;
+  abbrev: string;
+  ownerName: string;
+  logoUrl: string | null;
+  wins: number;
+  losses: number;
+  ties: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  waiverRank: number | null;
+  faabRemaining: number | null;
+};
+
+export type Matchup = {
+  id: string;
+  week: number;
+  homeTeamId: string;
+  awayTeamId: string | null;
+  homeScore: number;
+  awayScore: number;
+  homeProjected: number | null;
+  awayProjected: number | null;
+  homeYetToPlay: number | null;
+  awayYetToPlay: number | null;
+  isPlayoff: boolean;
+  isFinal: boolean;
+  winnerId: string | null;
+};
+
+export type Player = {
+  id: string;
+  espnPlayerId: number;
+  name: string;
+  position: string;
+  nflTeam: string;
+  ownershipPct: number | null;
+  ownershipDelta: number | null;
+  injuryStatus: string | null;
+  headshotUrl: string | null;
+};
+
+export type RosterSlot = {
+  teamId: string;
+  week: number;
+  playerId: string;
+  slot: string;
+  isStarter: boolean;
+  points: number;
+  projected: number | null;
+};
+
+export type Transaction = {
+  id: string;
+  week: number;
+  type: string; // WAIVER | FREEAGENT | TRADE
+  teamId: string | null;
+  playerInId: string | null;
+  playerOutId: string | null;
+  faabBid: number | null;
+  executedAt: string | null;
+};
+
+export type DraftPick = {
+  teamId: string;
+  playerId: string;
+  round: number;
+  pick: number;
+  keeper: boolean;
+};
+
+export type Stat = {
+  teamId: string;
+  week: number; // 0 = season-to-date
+  statKey: string;
+  value: number;
+};
+
+export type Recap = {
+  week: number;
+  markdown: string;
+  generatedAt: string;
+};
+
+export type Bundle = {
+  league: League;
+  teams: Team[];
+  matchups: Matchup[];
+  players: Player[];
+  rosterSlots: RosterSlot[];
+  transactions: Transaction[];
+  draftPicks: DraftPick[];
+  stats: Stat[];
+  recaps: Recap[];
+  demo: boolean;
+};

@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+/* Theme tokens. Light on bare :root; dark under prefers-color-scheme guarded
+   against an explicit light choice, and again under data-theme="dark" so the
+   toggle wins both ways. */
+:root {
+  color-scheme: light;
+  --bg: #f9f9f7;
+  --surface: #fcfcfb;
+  --surface-2: #f0efec;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --gridline: #e1e0d9;
+  --hairline: rgba(11, 11, 11, 0.1);
+  --accent: #2a78d6;
+  --accent-soft: #cde2fb;
+  --meter-track: #cde2fb;
+  --good: #0ca30c;
+  --good-text: #006300;
+  --bad: #d03b3b;
+  --warn: #fab219;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --bg: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #262624;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --gridline: #2c2c2a;
+    --hairline: rgba(255, 255, 255, 0.1);
+    --accent: #3987e5;
+    --accent-soft: #184f95;
+    --meter-track: rgba(57, 135, 229, 0.22);
+    --good: #0ca30c;
+    --good-text: #0ca30c;
+    --bad: #e66767;
+    --warn: #fab219;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-2: #262624;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --gridline: #2c2c2a;
+  --hairline: rgba(255, 255, 255, 0.1);
+  --accent: #3987e5;
+  --accent-soft: #184f95;
+  --meter-track: rgba(57, 135, 229, 0.22);
+  --good: #0ca30c;
+  --good-text: #0ca30c;
+  --bad: #e66767;
+  --warn: #fab219;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-gridline: var(--gridline);
+  --color-hairline: var(--hairline);
+  --color-accent: var(--accent);
+  --color-accentsoft: var(--accent-soft);
+  --color-metertrack: var(--meter-track);
+  --color-good: var(--good);
+  --color-goodtext: var(--good-text);
+  --color-bad: var(--bad);
+  --color-warn: var(--warn);
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* Small shared primitives */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+}
+.kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+th {
+  font-weight: 600;
+}
