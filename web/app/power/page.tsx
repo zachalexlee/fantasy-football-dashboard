@@ -5,8 +5,6 @@ import { getBundle } from "@/lib/data";
 import { fmtPts, record } from "@/lib/format";
 import { statLookup, weeklyPoints } from "@/lib/stats";
 
-export const revalidate = 60;
-
 function Movement({ now, prev }: { now: number; prev: number | undefined }) {
   if (prev == null || prev === now)
     return <span className="tnum w-8 text-center text-xs text-muted">—</span>;

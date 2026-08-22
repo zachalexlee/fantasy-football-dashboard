@@ -4,8 +4,6 @@ import Markdown from "react-markdown";
 import WeekPicker from "@/components/WeekPicker";
 import { getBundle } from "@/lib/data";
 
-export const revalidate = 60;
-
 export default async function RecapPage({ params }: { params: Promise<{ week: string }> }) {
   const { week: weekStr } = await params;
   const week = Number(weekStr);

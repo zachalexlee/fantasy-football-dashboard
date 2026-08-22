@@ -5,8 +5,6 @@ import { getBundle } from "@/lib/data";
 import { fmtPct, record } from "@/lib/format";
 import { statLookup } from "@/lib/stats";
 
-export const revalidate = 60;
-
 export default async function Odds() {
   const bundle = await getBundle();
   const { league } = bundle;

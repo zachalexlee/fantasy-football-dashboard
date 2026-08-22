@@ -2,8 +2,6 @@ import { getBundle } from "@/lib/data";
 import { fmtPts } from "@/lib/format";
 import { playerById, teamById } from "@/lib/stats";
 
-export const revalidate = 60;
-
 export default async function Draft() {
   const bundle = await getBundle();
   const team = teamById(bundle);

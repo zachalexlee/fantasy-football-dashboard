@@ -4,8 +4,6 @@ import { getBundle } from "@/lib/data";
 import { fmtPct, fmtPts } from "@/lib/format";
 import { lastCompletedWeek, recordVsSchedule, standings, statLookup } from "@/lib/stats";
 
-export const revalidate = 60;
-
 export default async function Analysis() {
   const bundle = await getBundle();
   const stat = statLookup(bundle);

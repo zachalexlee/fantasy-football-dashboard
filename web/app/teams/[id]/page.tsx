@@ -6,8 +6,6 @@ import { getBundle } from "@/lib/data";
 import { fmtPct, fmtPts, fmtSigned, ordinal, record } from "@/lib/format";
 import { playerById, statLookup, teamById, weeklyPoints } from "@/lib/stats";
 
-export const revalidate = 60;
-
 function Chip({ label, value }: { label: string; value: string }) {
   return (
     <div className="card px-3 py-2">

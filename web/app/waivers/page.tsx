@@ -5,8 +5,6 @@ import { getBundle } from "@/lib/data";
 import { fmtPts, fmtSignedPct } from "@/lib/format";
 import { playerById, statLookup, teamById } from "@/lib/stats";
 
-export const revalidate = 60;
-
 export default async function Waivers() {
   const bundle = await getBundle();
   const stat = statLookup(bundle);

@@ -7,8 +7,6 @@ import { getBundle } from "@/lib/data";
 import { fmtPts, fmtSigned, record, streakLabel } from "@/lib/format";
 import { standings, statLookup, teamById, weeklyPoints } from "@/lib/stats";
 
-export const revalidate = 60;
-
 export default async function Home({
   searchParams,
 }: {

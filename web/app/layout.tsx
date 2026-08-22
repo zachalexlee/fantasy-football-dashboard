@@ -11,6 +11,11 @@ export const metadata: Metadata = {
   description: "Standings, matchups, waivers, power rankings, and weekly recaps",
 };
 
+// Render every page per-request so a build can never bake stale (or demo)
+// data into static pages. Supabase reads stay cached for 60s in lib/data.ts,
+// so this costs at most one DB round-trip per table per minute.
+export const dynamic = "force-dynamic";
+
 const THEME_INIT = `try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}`;
 
 function SyncBadge({ syncedAt, demo }: { syncedAt: string | null; demo: boolean }) {

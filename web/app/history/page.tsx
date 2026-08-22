@@ -3,8 +3,6 @@ import { getBundle } from "@/lib/data";
 import { fmtPts } from "@/lib/format";
 import { headToHead, recordBook, standings, teamById } from "@/lib/stats";
 
-export const revalidate = 60;
-
 export default async function History() {
   const bundle = await getBundle();
   const team = teamById(bundle);
