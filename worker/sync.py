@@ -36,6 +36,7 @@ class Sync:
         self.player_uuid: dict[int, str] = {}   # espn player id -> uuid
         self.slot_counts: dict[str, int] = {}
         self.current_week = 1
+        self.prev_seasons: list[int] = []
 
     # ------------------------------------------------------------- fetchers
 
@@ -47,6 +48,7 @@ class Sync:
         sched = settings.get("scheduleSettings", {})
         acq = settings.get("acquisitionSettings", {})
         self.current_week = status.get("currentMatchupPeriod", 1)
+        self.prev_seasons = status.get("previousSeasons", [])
 
         lineup_counts = settings.get("rosterSettings", {}).get("lineupSlotCounts", {})
         self.slot_counts = {
@@ -72,21 +74,30 @@ class Sync:
             "faab_budget": acq.get("acquisitionBudget"),
         }], on_conflict="espn_league_id,season")
 
+        rows = self._team_rows(data, self.league_row["id"], acq)
+        stored = self.db.upsert("teams", rows, on_conflict="league_id,espn_team_id")
+        self.team_uuid = {r["espn_team_id"]: r["id"] for r in stored}
+
+    @staticmethod
+    def _team_rows(data: dict, league_id: str, acq: dict) -> list[dict]:
         members = {m["id"]: m for m in data.get("members", [])}
         rows = []
         for t in data.get("teams", []):
-            owner = members.get((t.get("owners") or [None])[0], {})
+            owner_guid = (t.get("owners") or [None])[0]
+            owner = members.get(owner_guid, {})
             owner_name = (owner.get("displayName")
                           or f"{owner.get('firstName', '')} {owner.get('lastName', '')}".strip())
             rec = t.get("record", {}).get("overall", {})
             budget = acq.get("acquisitionBudget") or 0
             spent = t.get("transactionCounter", {}).get("acquisitionBudgetSpent", 0)
+            final_rank = t.get("rankCalculatedFinal") or t.get("rankFinal") or 0
             rows.append({
-                "league_id": self.league_row["id"],
+                "league_id": league_id,
                 "espn_team_id": t["id"],
                 "name": t.get("name") or f"{t.get('location', '')} {t.get('nickname', '')}".strip(),
                 "abbrev": t.get("abbrev", ""),
                 "owner_name": owner_name,
+                "owner_guid": owner_guid,
                 "logo_url": t.get("logo"),
                 "wins": rec.get("wins", 0),
                 "losses": rec.get("losses", 0),
@@ -96,9 +107,77 @@ class Sync:
                 "waiver_rank": t.get("waiverRank"),
                 "faab_remaining": (budget - spent) if budget else None,
                 "playoff_seed": t.get("playoffSeed"),
+                "final_rank": final_rank or None,
             })
-        stored = self.db.upsert("teams", rows, on_conflict="league_id,espn_team_id")
-        self.team_uuid = {r["espn_team_id"]: r["id"] for r in stored}
+        return rows
+
+    def backfill_history(self) -> None:
+        """One-time pull of every prior season (they never change once stored).
+
+        The leagueHistory endpoint serves old seasons' teams, final standings,
+        and full schedules with scores — enough for the all-time record book,
+        championships, and franchise stats. Player-level boxscores generally
+        aren't served for old seasons, so those stay current-season only."""
+        existing = {int(r["season"]) for r in self.db.select(
+            "leagues", f"select=season&espn_league_id=eq.{self.espn.league_id}")}
+        for season in sorted(self.prev_seasons):
+            if season in existing:
+                continue
+            try:
+                data = self.espn.fetch_history(season, ["mTeam", "mSettings", "mMatchup"])
+                self._store_season_snapshot(season, data)
+                log.info("Backfilled season %d", season)
+            except Exception as exc:  # a bad old season never blocks the live sync
+                log.warning("History backfill for %d failed: %s", season, exc)
+
+    def _store_season_snapshot(self, season: int, data: dict) -> None:
+        settings = data.get("settings", {})
+        status = data.get("status", {})
+        sched = settings.get("scheduleSettings", {})
+        acq = settings.get("acquisitionSettings", {})
+        [league_row] = self.db.upsert("leagues", [{
+            "espn_league_id": self.espn.league_id,
+            "season": season,
+            "name": settings.get("name", ""),
+            "scoring_json": settings.get("scoringSettings", {}),
+            "settings_json": {"scheduleSettings": sched},
+            "current_week": status.get("finalScoringPeriod", 17),
+            "final_week": status.get("finalScoringPeriod", 17),
+            "playoff_team_count": sched.get("playoffTeamCount", 6),
+            "regular_season_weeks": sched.get("matchupPeriodCount", 14),
+            "faab_budget": acq.get("acquisitionBudget"),
+            "synced_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        }], on_conflict="espn_league_id,season")
+
+        stored = self.db.upsert("teams", self._team_rows(data, league_row["id"], acq),
+                                on_conflict="league_id,espn_team_id")
+        uuid_of = {r["espn_team_id"]: r["id"] for r in stored}
+
+        matchup_rows = []
+        for e in data.get("schedule", []):
+            week = e.get("matchupPeriodId")
+            home = e.get("home") or {}
+            away = e.get("away")
+            home_id = uuid_of.get(home.get("teamId"))
+            if not week or not home_id:
+                continue
+            away_id = uuid_of.get(away.get("teamId")) if away else None
+            winner = e.get("winner", "UNDECIDED")
+            winner_id = home_id if winner == "HOME" else away_id if winner == "AWAY" else None
+            matchup_rows.append({
+                "league_id": league_row["id"],
+                "week": week,
+                "home_team_id": home_id,
+                "away_team_id": away_id,
+                "home_score": round(home.get("totalPoints", 0), 2),
+                "away_score": round(away.get("totalPoints", 0), 2) if away else 0,
+                "home_projected": None, "away_projected": None,
+                "home_yet_to_play": None, "away_yet_to_play": None,
+                "is_playoff": e.get("playoffTierType", "NONE") != "NONE",
+                "is_final": winner != "UNDECIDED",
+                "winner_id": winner_id,
+            })
+        self.db.upsert("matchups", matchup_rows, on_conflict="league_id,week,home_team_id")
 
     def _upsert_players(self, players: list[dict]) -> None:
         rows, seen = [], set()
@@ -399,6 +478,7 @@ class Sync:
 
     def run(self, full_backfill: bool = False) -> None:
         self.fetch_league()
+        self.backfill_history()
         self.fetch_players()
         self.fetch_matchups_and_rosters(full_backfill=full_backfill)
         self.fetch_transactions()

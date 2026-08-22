@@ -16,6 +16,7 @@ export type Team = {
   name: string;
   abbrev: string;
   ownerName: string;
+  ownerGuid: string | null;
   logoUrl: string | null;
   wins: number;
   losses: number;
@@ -24,6 +25,7 @@ export type Team = {
   pointsAgainst: number;
   waiverRank: number | null;
   faabRemaining: number | null;
+  finalRank: number | null; // where the team finished; null while a season runs
 };
 
 export type Matchup = {
@@ -96,7 +98,16 @@ export type Recap = {
   generatedAt: string;
 };
 
+/** One season's slice of the league — enough for cross-season reports. */
+export type SeasonSlice = {
+  league: League;
+  teams: Team[];
+  matchups: Matchup[];
+};
+
 export type Bundle = {
+  /** Every synced season (current included), newest first. */
+  seasons: SeasonSlice[];
   league: League;
   teams: Team[];
   matchups: Matchup[];

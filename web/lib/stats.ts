@@ -1,7 +1,7 @@
 // Cheap display-level selectors over the bundle. Heavy math (all-play, luck,
 // power, odds, efficiency) comes precomputed from computed_stats.
 
-import type { Bundle, Matchup, Team } from "./types";
+import type { Bundle, Matchup, SeasonSlice, Team } from "./types";
 
 export function statLookup(bundle: Bundle) {
   const map = new Map<string, number>();
@@ -129,4 +129,180 @@ export function headToHead(bundle: Bundle) {
     }
   }
   return (a: string, b: string) => h2h.get(`${a}|${b}`) ?? { w: 0, l: 0, t: 0 };
+}
+
+// ---------------------------------------------------------------------------
+// Cross-season (franchise) reports. Managers are matched across seasons by
+// ESPN owner guid, falling back to display name for very old seasons.
+
+const franchiseKey = (t: Team) => t.ownerGuid ?? t.ownerName ?? t.name;
+
+export type Franchise = {
+  key: string;
+  /** Most recent team object (for name, logo, links). */
+  team: Team;
+  managerName: string;
+  seasonsPlayed: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  championships: number;
+  runnerUps: number;
+  top5: number;
+  playoffBerths: number;
+  bestFinish: { rank: number; season: number } | null;
+  inCurrentSeason: boolean;
+};
+
+/** A season counts once games were played or a final rank exists. */
+const seasonCounts = (t: Team) => t.wins + t.losses + t.ties > 0 || (t.finalRank ?? 0) > 0;
+
+export function franchises(bundle: Bundle): Franchise[] {
+  const map = new Map<string, Franchise>();
+  bundle.seasons.forEach((slice, si) => {
+    for (const t of slice.teams) {
+      const key = franchiseKey(t);
+      let f = map.get(key);
+      if (!f) {
+        f = {
+          key, team: t, managerName: t.ownerName || t.name,
+          seasonsPlayed: 0, wins: 0, losses: 0, ties: 0,
+          pointsFor: 0, pointsAgainst: 0,
+          championships: 0, runnerUps: 0, top5: 0, playoffBerths: 0,
+          bestFinish: null, inCurrentSeason: si === 0,
+        };
+        map.set(key, f);
+      }
+      if (!seasonCounts(t)) continue;
+      f.seasonsPlayed++;
+      f.wins += t.wins;
+      f.losses += t.losses;
+      f.ties += t.ties;
+      f.pointsFor += t.pointsFor;
+      f.pointsAgainst += t.pointsAgainst;
+      const rank = t.finalRank ?? 0;
+      if (rank > 0) {
+        if (rank === 1) f.championships++;
+        if (rank === 2) f.runnerUps++;
+        if (rank <= 5) f.top5++;
+        if (rank <= slice.league.playoffTeamCount) f.playoffBerths++;
+        if (!f.bestFinish || rank < f.bestFinish.rank)
+          f.bestFinish = { rank, season: slice.league.season };
+      }
+    }
+  });
+  return [...map.values()].sort(
+    (a, b) =>
+      b.championships - a.championships ||
+      (a.bestFinish?.rank ?? 99) - (b.bestFinish?.rank ?? 99) ||
+      winPct(b) - winPct(a)
+  );
+}
+
+export const winPct = (f: { wins: number; losses: number; ties: number }) => {
+  const g = f.wins + f.losses + f.ties;
+  return g ? (f.wins + f.ties * 0.5) / g : 0;
+};
+
+export function championshipHistory(bundle: Bundle) {
+  return bundle.seasons
+    .filter((s) => s.teams.some((t) => (t.finalRank ?? 0) > 0))
+    .map((s) => ({
+      season: s.league.season,
+      champion: s.teams.find((t) => t.finalRank === 1),
+      runnerUp: s.teams.find((t) => t.finalRank === 2),
+    }))
+    .sort((a, b) => b.season - a.season);
+}
+
+export type AllTimePerf = { season: number; week: number; teamName: string; oppAbbrev: string; points: number };
+export type AllTimeGame = {
+  season: number; week: number; margin: number;
+  homeAbbrev: string; awayAbbrev: string; homeScore: number; awayScore: number; homeWon: boolean;
+};
+
+/** Record book across every synced season. Zero-score placeholder games
+ * (unplayed old consolation slots) are excluded. */
+export function recordBookAllTime(bundle: Bundle) {
+  const perfs: AllTimePerf[] = [];
+  const games: AllTimeGame[] = [];
+  for (const slice of bundle.seasons) {
+    const team = new Map(slice.teams.map((t) => [t.id, t]));
+    for (const m of slice.matchups) {
+      if (!m.isFinal || !m.awayTeamId) continue;
+      if (m.homeScore <= 0 && m.awayScore <= 0) continue;
+      const home = team.get(m.homeTeamId);
+      const away = team.get(m.awayTeamId);
+      if (!home || !away) continue;
+      const base = { season: slice.league.season, week: m.week };
+      perfs.push(
+        { ...base, teamName: home.name, oppAbbrev: away.abbrev, points: m.homeScore },
+        { ...base, teamName: away.name, oppAbbrev: home.abbrev, points: m.awayScore }
+      );
+      games.push({
+        ...base,
+        margin: Math.abs(m.homeScore - m.awayScore),
+        homeAbbrev: home.abbrev, awayAbbrev: away.abbrev,
+        homeScore: m.homeScore, awayScore: m.awayScore,
+        homeWon: m.winnerId === m.homeTeamId,
+      });
+    }
+  }
+  const realPerfs = perfs.filter((p) => p.points > 0);
+  return {
+    topScores: [...perfs].sort((a, b) => b.points - a.points).slice(0, 8),
+    lowScores: [...realPerfs].sort((a, b) => a.points - b.points).slice(0, 8),
+    blowouts: [...games].sort((a, b) => b.margin - a.margin).slice(0, 6),
+    nailbiters: [...games].sort((a, b) => a.margin - b.margin).slice(0, 6),
+  };
+}
+
+/** Best single seasons: points-for and record. */
+export function seasonBests(bundle: Bundle) {
+  const rows = bundle.seasons.flatMap((s) =>
+    s.teams.filter(seasonCounts).map((t) => ({
+      season: s.league.season,
+      team: t,
+      pf: t.pointsFor,
+      pct: winPct(t),
+      record: { wins: t.wins, losses: t.losses, ties: t.ties },
+    }))
+  );
+  return {
+    topPF: [...rows].sort((a, b) => b.pf - a.pf).slice(0, 6),
+    bestRecords: [...rows].sort((a, b) => b.pct - a.pct || b.pf - a.pf).slice(0, 6),
+  };
+}
+
+/** All-time head-to-head between franchises (regular season + playoffs). */
+export function franchiseH2H(bundle: Bundle) {
+  const cells = new Map<string, ScheduleCell>();
+  const bump = (a: string, b: string, field: keyof ScheduleCell) => {
+    const key = `${a}|${b}`;
+    if (!cells.has(key)) cells.set(key, { w: 0, l: 0, t: 0 });
+    cells.get(key)![field]++;
+  };
+  for (const slice of bundle.seasons) {
+    const keyOf = new Map(slice.teams.map((t) => [t.id, franchiseKey(t)]));
+    for (const m of slice.matchups) {
+      if (!m.isFinal || !m.awayTeamId) continue;
+      if (m.homeScore <= 0 && m.awayScore <= 0) continue;
+      const h = keyOf.get(m.homeTeamId);
+      const a = keyOf.get(m.awayTeamId);
+      if (!h || !a || h === a) continue;
+      if (m.homeScore === m.awayScore) {
+        bump(h, a, "t");
+        bump(a, h, "t");
+      } else if (m.winnerId === m.homeTeamId) {
+        bump(h, a, "w");
+        bump(a, h, "l");
+      } else {
+        bump(h, a, "l");
+        bump(a, h, "w");
+      }
+    }
+  }
+  return (a: string, b: string): ScheduleCell => cells.get(`${a}|${b}`) ?? { w: 0, l: 0, t: 0 };
 }

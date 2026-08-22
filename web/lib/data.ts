@@ -4,7 +4,7 @@
 
 import { cache } from "react";
 import { demoBundle } from "./demo";
-import type { Bundle } from "./types";
+import type { Bundle, League, Matchup, SeasonSlice, Team } from "./types";
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -29,16 +29,61 @@ async function rest(path: string): Promise<Record<string, unknown>[]> {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-async function supabaseBundle(): Promise<Bundle | null> {
-  const leagues = await rest("leagues?select=*&order=season.desc&limit=1");
-  if (!leagues.length) return null; // nothing synced yet — caller falls back to demo
-  const lg = leagues[0] as any;
-  const lid = lg.id as string;
+const mapLeague = (lg: any): League => ({
+  id: lg.id,
+  name: lg.name,
+  season: lg.season,
+  currentWeek: lg.current_week,
+  finalWeek: lg.final_week,
+  playoffTeamCount: lg.playoff_team_count,
+  regularSeasonWeeks: lg.regular_season_weeks,
+  faabBudget: lg.faab_budget,
+  syncedAt: lg.synced_at,
+});
 
-  const [teams, matchups, players, rosterSlots, transactions, draftPicks, stats, recaps] =
+const mapTeam = (t: any): Team => ({
+  id: t.id,
+  espnTeamId: t.espn_team_id,
+  name: t.name,
+  abbrev: t.abbrev,
+  ownerName: t.owner_name,
+  ownerGuid: t.owner_guid ?? null,
+  logoUrl: t.logo_url,
+  wins: t.wins,
+  losses: t.losses,
+  ties: t.ties,
+  pointsFor: Number(t.points_for),
+  pointsAgainst: Number(t.points_against),
+  waiverRank: t.waiver_rank,
+  faabRemaining: t.faab_remaining,
+  finalRank: t.final_rank ?? null,
+});
+
+const mapMatchup = (m: any): Matchup => ({
+  id: m.id,
+  week: m.week,
+  homeTeamId: m.home_team_id,
+  awayTeamId: m.away_team_id,
+  homeScore: Number(m.home_score),
+  awayScore: Number(m.away_score),
+  homeProjected: m.home_projected == null ? null : Number(m.home_projected),
+  awayProjected: m.away_projected == null ? null : Number(m.away_projected),
+  homeYetToPlay: m.home_yet_to_play,
+  awayYetToPlay: m.away_yet_to_play,
+  isPlayoff: m.is_playoff,
+  isFinal: m.is_final,
+  winnerId: m.winner_id,
+});
+
+async function supabaseBundle(): Promise<Bundle | null> {
+  const leagues = await rest("leagues?select=*&order=season.desc");
+  if (!leagues.length) return null; // nothing synced yet — caller falls back to demo
+  const lid = (leagues[0] as any).id as string;
+
+  const [allTeams, allMatchups, players, rosterSlots, transactions, draftPicks, stats, recaps] =
     await Promise.all([
-      rest(`teams?select=*&league_id=eq.${lid}`),
-      rest(`matchups?select=*&league_id=eq.${lid}&order=week`),
+      rest(`teams?select=*`),
+      rest(`matchups?select=*&order=week`),
       rest(`players?select=*`),
       rest(`roster_slots?select=*`),
       rest(`transactions?select=*&league_id=eq.${lid}&order=executed_at.desc`),
@@ -47,49 +92,19 @@ async function supabaseBundle(): Promise<Bundle | null> {
       rest(`recaps?select=*&league_id=eq.${lid}&order=week`),
     ]);
 
-  const teamIds = new Set(teams.map((t: any) => t.id));
+  const seasons: SeasonSlice[] = (leagues as any[]).map((lg) => ({
+    league: mapLeague(lg),
+    teams: (allTeams as any[]).filter((t) => t.league_id === lg.id).map(mapTeam),
+    matchups: (allMatchups as any[]).filter((m) => m.league_id === lg.id).map(mapMatchup),
+  }));
+  const current = seasons[0];
+  const teamIds = new Set(current.teams.map((t) => t.id));
+
   return {
-    league: {
-      id: lid,
-      name: lg.name,
-      season: lg.season,
-      currentWeek: lg.current_week,
-      finalWeek: lg.final_week,
-      playoffTeamCount: lg.playoff_team_count,
-      regularSeasonWeeks: lg.regular_season_weeks,
-      faabBudget: lg.faab_budget,
-      syncedAt: lg.synced_at,
-    },
-    teams: (teams as any[]).map((t) => ({
-      id: t.id,
-      espnTeamId: t.espn_team_id,
-      name: t.name,
-      abbrev: t.abbrev,
-      ownerName: t.owner_name,
-      logoUrl: t.logo_url,
-      wins: t.wins,
-      losses: t.losses,
-      ties: t.ties,
-      pointsFor: Number(t.points_for),
-      pointsAgainst: Number(t.points_against),
-      waiverRank: t.waiver_rank,
-      faabRemaining: t.faab_remaining,
-    })),
-    matchups: (matchups as any[]).map((m) => ({
-      id: m.id,
-      week: m.week,
-      homeTeamId: m.home_team_id,
-      awayTeamId: m.away_team_id,
-      homeScore: Number(m.home_score),
-      awayScore: Number(m.away_score),
-      homeProjected: m.home_projected == null ? null : Number(m.home_projected),
-      awayProjected: m.away_projected == null ? null : Number(m.away_projected),
-      homeYetToPlay: m.home_yet_to_play,
-      awayYetToPlay: m.away_yet_to_play,
-      isPlayoff: m.is_playoff,
-      isFinal: m.is_final,
-      winnerId: m.winner_id,
-    })),
+    seasons,
+    league: current.league,
+    teams: current.teams,
+    matchups: current.matchups,
     players: (players as any[]).map((p) => ({
       id: p.id,
       espnPlayerId: p.espn_player_id,

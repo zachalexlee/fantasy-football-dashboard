@@ -130,11 +130,13 @@ function buildBundle(): Bundle {
     name,
     abbrev,
     ownerName: owner,
+    ownerGuid: owner,
     logoUrl: `emoji:${emoji}`,
     wins: 0, losses: 0, ties: 0,
     pointsFor: 0, pointsAgainst: 0,
     waiverRank: null,
     faabRemaining: 100,
+    finalRank: null,
   }));
 
   // Team strength shapes rosters: strong teams drafted better.
@@ -360,18 +362,20 @@ function buildBundle(): Bundle {
     });
   }
 
+  const league = {
+    id: "demo",
+    name: "Sunday Scaries League",
+    season: 2026,
+    currentWeek,
+    finalWeek: 17,
+    playoffTeamCount: 6,
+    regularSeasonWeeks,
+    faabBudget: 100,
+    syncedAt: null,
+  };
   return {
-    league: {
-      id: "demo",
-      name: "Sunday Scaries League",
-      season: 2026,
-      currentWeek,
-      finalWeek: 17,
-      playoffTeamCount: 6,
-      regularSeasonWeeks,
-      faabBudget: 100,
-      syncedAt: null,
-    },
+    league,
+    seasons: [{ league, teams, matchups }],
     teams,
     matchups,
     players: players.map(({ talent: _talent, ...p }) => ({
