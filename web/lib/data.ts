@@ -29,9 +29,9 @@ async function rest(path: string): Promise<Record<string, unknown>[]> {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-async function supabaseBundle(): Promise<Bundle> {
+async function supabaseBundle(): Promise<Bundle | null> {
   const leagues = await rest("leagues?select=*&order=season.desc&limit=1");
-  if (!leagues.length) throw new Error("No league synced yet — run the worker once.");
+  if (!leagues.length) return null; // nothing synced yet — caller falls back to demo
   const lg = leagues[0] as any;
   const lid = lg.id as string;
 
@@ -145,6 +145,14 @@ async function supabaseBundle(): Promise<Bundle> {
 }
 
 export const getBundle = cache(async (): Promise<Bundle> => {
-  if (URL && KEY) return supabaseBundle();
+  if (URL && KEY) {
+    try {
+      const bundle = await supabaseBundle();
+      if (bundle) return bundle;
+    } catch (err) {
+      // Supabase down or misconfigured: serve demo rather than a broken page.
+      console.error("Supabase read failed, serving demo data:", err);
+    }
+  }
   return demoBundle();
 });
