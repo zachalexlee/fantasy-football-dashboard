@@ -143,8 +143,13 @@ class EspnClient:
         return data.get("players", [])
 
     def fetch_history(self, season: int, views: list[str]) -> dict:
-        """Prior seasons (pre-current) live on the leagueHistory endpoint."""
-        url = f"{BASE}/leagueHistory/{self.league_id}"
-        params = [("seasonId", str(season))] + [("view", v) for v in views]
+        """Prior seasons. 2018+ live on the normal per-season endpoint;
+        only pre-2018 seasons use leagueHistory (which 404s for newer ones)."""
+        if season >= 2018:
+            url = f"{BASE}/seasons/{season}/segments/0/leagues/{self.league_id}"
+            params = [("view", v) for v in views]
+        else:
+            url = f"{BASE}/leagueHistory/{self.league_id}"
+            params = [("seasonId", str(season))] + [("view", v) for v in views]
         data = self._get(url, params)
         return data[0] if isinstance(data, list) else data
