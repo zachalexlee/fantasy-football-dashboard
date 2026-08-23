@@ -59,6 +59,9 @@ function Embed({ h }: { h: Highlight }) {
 
 export default function Highlights({ highlights }: { highlights: Highlight[] }) {
   if (!highlights.length) return null;
+  const sources = Array.from(
+    new Set(highlights.map((h) => h.source).filter(Boolean) as string[])
+  );
   return (
     <section>
       <h3 className="mb-2 font-bold">🎬 Highlights</h3>
@@ -73,7 +76,9 @@ export default function Highlights({ highlights }: { highlights: Highlight[] }) 
           )}
         </div>
       </div>
-      <p className="mt-1.5 text-xs text-muted">Highlight clips via Highlightly.</p>
+      <p className="mt-1.5 text-xs text-muted">
+        Official game highlights{sources.length ? ` via ${sources.join(" & ")}` : ""}.
+      </p>
     </section>
   );
 }

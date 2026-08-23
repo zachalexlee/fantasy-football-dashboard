@@ -116,6 +116,7 @@ export type Highlight = {
   homeTeam: string | null;
   awayTeam: string | null;
   kind: string | null;
+  espnEventId: string | null;
 };
 
 export type GameAnalysis = {

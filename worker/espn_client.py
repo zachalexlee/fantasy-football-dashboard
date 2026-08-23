@@ -11,6 +11,7 @@ They last months. Repeated 401s raise CookieExpired so the caller can alert.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 import time
@@ -142,45 +143,48 @@ class EspnClient:
             data = data[0]
         return data.get("players", [])
 
-    def fetch_nfl_scoreboard(self, dates: str | None = None,
-                             week: int | None = None) -> list[dict]:
-        """Real NFL games (scores, status, broadcast network) from ESPN's public
-        site scoreboard API. ESPN 403s the parameter-less "current" call from a
-        server, so pass a `dates` window (YYYYMMDD or YYYYMMDD-YYYYMMDD) — the
-        response still reports its own season type and week, so this shows
-        preseason in August and the regular season once it starts."""
+    _BROWSER_HEADERS = {
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/125.0 Safari/537.36"),
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.espn.com/nfl/scoreboard",
+    }
+
+    def _scoreboard_sbdata(self, dates: str | None = None,
+                           week: int | None = None) -> dict:
+        """Raw ESPN scoreboard payload (sbData shape: season, week, events).
+        Tries site.api first, falls back to the CDN core endpoint which runs on
+        different infra and isn't WAF-blocked from a server IP."""
         params: list[tuple[str, str]] = []
         if week is not None:
             params += [("seasontype", "2"), ("week", str(week)), ("dates", str(self.season))]
         elif dates:
             params.append(("dates", dates))
-        headers = {
-            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/125.0 Safari/537.36"),
-            "Accept": "application/json, text/plain, */*",
-            "Referer": "https://www.espn.com/nfl/scoreboard",
-        }
-        # site.api WAF-blocks the server IP (403); the CDN core endpoint runs on
-        # different infra and returns the same event shape under content.sbData.
-        sb = {}
         site_url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
         try:
-            sb = self._get(site_url, params, headers=headers)
+            return self._get(site_url, params, headers=self._BROWSER_HEADERS)
         except requests.HTTPError as exc:
             log.warning("site.api scoreboard failed (%s); falling back to CDN", exc)
             # The CDN core endpoint defaults to the current week and returns the
             # SPA shell (not JSON) if given a date range — so query it bare.
             cdn_url = "https://cdn.espn.com/core/nfl/scoreboard"
-            resp = self.session.get(cdn_url, params=[("xhr", "1")], headers=headers, timeout=30)
+            resp = self.session.get(cdn_url, params=[("xhr", "1")],
+                                    headers=self._BROWSER_HEADERS, timeout=30)
             resp.raise_for_status()
             try:
                 data = resp.json()
             except ValueError:
                 log.warning("CDN scoreboard non-JSON (%d): %s", resp.status_code, resp.text[:200])
-                data = {}
-            sb = (data.get("content", {}) or {}).get("sbData", {}) if isinstance(data, dict) else {}
+                return {}
+            return (data.get("content", {}) or {}).get("sbData", {}) if isinstance(data, dict) else {}
 
+    def fetch_nfl_scoreboard(self, dates: str | None = None,
+                             week: int | None = None) -> list[dict]:
+        """Real NFL games (scores, status, broadcast network) from ESPN's public
+        scoreboard. The response reports its own season type and week, so this
+        shows preseason in August and the regular season once it starts."""
+        sb = self._scoreboard_sbdata(dates, week)
         season_type = sb.get("season", {}).get("type", 2)
         real_week = sb.get("week", {}).get("number", week or 1)
         games = []
@@ -207,63 +211,65 @@ class EspnClient:
             })
         return games
 
-    def probe_highlights(self) -> None:
-        """TEMP diagnostic: does ESPN expose preseason highlight video? Logs
-        what video/highlight content the public CDN feeds carry so we can
-        decide whether to build an ESPN highlight source. Remove after use."""
-        headers = {
-            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/125.0 Safari/537.36"),
-            "Accept": "application/json, text/plain, */*",
-            "Referer": "https://www.espn.com/nfl/scoreboard",
-        }
-        # 1) scoreboard — grab event ids + any inline highlights
+    @staticmethod
+    def _espn_video_id(href: str | None) -> str | None:
+        """Pull the numeric clip id out of an ESPN video URL like
+        .../video/clip/_/id/49686335/game-highlights."""
+        if not href or "/id/" not in href:
+            return None
+        tail = href.split("/id/", 1)[1]
+        vid = tail.split("/", 1)[0]
+        return vid if vid.isdigit() else None
+
+    def fetch_nfl_highlights(self, dates: str | None = None,
+                             week: int | None = None) -> list[dict] | None:
+        """Official NFL game-highlight clips ESPN embeds inline in the
+        scoreboard — one reel per game, tagged leagueName=NFL. Unlike
+        Highlightly, ESPN carries these for the preseason. Clips expire ~48h
+        after each game (embargo/expiration windows), so expired ones are
+        skipped and the caller replaces the set every sync. Returns rows, or
+        None on a request error so the caller keeps last-good data."""
         try:
-            r = self.session.get("https://cdn.espn.com/core/nfl/scoreboard",
-                                 params=[("xhr", "1")], headers=headers, timeout=30)
-            sb = (r.json().get("content", {}) or {}).get("sbData", {})
-        except Exception as exc:
-            log.warning("PROBE scoreboard failed: %s", exc)
-            return
-        events = sb.get("events", []) or []
-        stype = sb.get("season", {}).get("type")
-        log.info("PROBE scoreboard: season_type=%s events=%d", stype, len(events))
-        ids = []
-        dumped = False
-        for e in events:
-            comp = (e.get("competitions") or [{}])[0]
-            hl = comp.get("highlights")
-            ids.append(str(e.get("id")))
-            if hl:
-                log.info("PROBE inline highlights on %s: %d", e.get("shortName"), len(hl))
-                if not dumped:
-                    import json as _json
-                    log.info("PROBE highlight[0] shape on %s: %s",
-                             e.get("shortName"), _json.dumps(hl[0])[:1400])
-                    dumped = True
-        # 2) gamepackage for the first few games — richest video source
-        for gid in ids[:3]:
-            try:
-                r = self.session.get("https://cdn.espn.com/core/nfl/game",
-                                     params=[("xhr", "1"), ("gameId", gid)],
-                                     headers=headers, timeout=30)
-                gp = (r.json().get("gamepackageJSON", {}) or {})
-            except Exception as exc:
-                log.warning("PROBE game %s failed: %s", gid, exc)
-                continue
-            vids = gp.get("videos") or []
-            hls = gp.get("highlights") or []
-            sample = None
-            pool = vids or hls
-            if pool and isinstance(pool[0], dict):
-                v = pool[0]
-                links = v.get("links") or {}
-                sample = {"headline": v.get("headline") or v.get("title"),
-                          "has_source": bool(links.get("source") or v.get("source")),
-                          "keys": list(v.keys())[:10]}
-            log.info("PROBE game %s: videos=%d highlights=%d sample=%s",
-                     gid, len(vids), len(hls), sample)
+            sb = self._scoreboard_sbdata(dates, week)
+        except requests.RequestException as exc:
+            log.warning("ESPN highlights scoreboard failed: %s", exc)
+            return None
+        now = dt.datetime.now(dt.timezone.utc)
+        rows: list[dict] = []
+        for event in sb.get("events", []):
+            comp = (event.get("competitions") or [{}])[0]
+            sides = {c.get("homeAway"): c for c in comp.get("competitors", [])}
+            home = (sides.get("home", {}).get("team") or {})
+            away = (sides.get("away", {}).get("team") or {})
+            for h in (comp.get("highlights") or []):
+                if str((h.get("tracking") or {}).get("leagueName") or "NFL").upper() != "NFL":
+                    continue
+                exp = (h.get("timeRestrictions") or {}).get("expirationDate")
+                if exp:
+                    try:
+                        if dt.datetime.fromisoformat(exp.replace("Z", "+00:00")) < now:
+                            continue  # clip has expired
+                    except ValueError:
+                        pass
+                web = ((h.get("links") or {}).get("web") or {})
+                url = (web.get("self") or {}).get("href") or web.get("href")
+                vid = self._espn_video_id(url) or h.get("cerebroId")
+                if not vid:
+                    continue
+                rows.append({
+                    "provider_id": f"espn:{vid}",
+                    "espn_event_id": str(event.get("id")),
+                    "title": h.get("description") or f"{event.get('shortName', '')} — Game Highlights",
+                    "url": url,
+                    "embed_url": None,  # ESPN clip streams are auth-gated; link out
+                    "thumbnail_url": h.get("thumbnail"),
+                    "source": "ESPN",
+                    "home_team": home.get("displayName") or home.get("abbreviation"),
+                    "away_team": away.get("displayName") or away.get("abbreviation"),
+                    "kind": (h.get("tracking") or {}).get("coverageType") or "highlight",
+                    "raw": h,
+                })
+        return rows
 
     def fetch_history(self, season: int, views: list[str]) -> dict:
         """Prior seasons. 2018+ live on the normal per-season endpoint;

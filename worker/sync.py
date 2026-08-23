@@ -477,10 +477,6 @@ class Sync:
         are dropped so the tab only ever shows what's on this window."""
         # A one-week window around today = "what's on now/soon"; avoids the
         # 403 ESPN returns for the parameter-less current-slate call.
-        try:
-            self.espn.probe_highlights()  # TEMP: assess ESPN preseason highlight video
-        except Exception as exc:
-            log.warning("probe_highlights errored: %s", exc)
         today = dt.datetime.now(dt.timezone.utc)
         window = f"{today:%Y%m%d}-{today + dt.timedelta(days=7):%Y%m%d}"
         games = self.espn.fetch_nfl_scoreboard(dates=window)
@@ -494,28 +490,54 @@ class Sync:
         self.db.delete("nfl_games", f"espn_event_id=not.in.({keep})")
 
     def fetch_highlights(self) -> None:
-        """NFL highlight clips from Highlightly (skipped when no API key)."""
-        if not highlightly_client.enabled():
-            return
-        client = highlightly_client.HighlightlyClient()
-        clips = client.fetch_highlights(self.espn.season)
-        if clips is None:
-            return  # request error — keep last-good data
+        """NFL highlight clips. ESPN is the primary source — it embeds an
+        official game-highlight reel per game inline in the scoreboard and
+        carries them through the preseason. Highlightly is a secondary source
+        that only contributes once it actually has NFL clips (today it's all
+        college). Both land in game_highlights; the set is replaced each sync."""
         now = dt.datetime.now(dt.timezone.utc).isoformat()
-        rows = []
-        for c in clips:
-            row = highlightly_client.to_row(c, self.espn.season)
-            if row:
-                rows.append({**row, "synced_at": now})
+        rows: list[dict] = []
+        had_error = False
+
+        # Primary: ESPN inline game highlights for the current slate.
+        today = dt.datetime.now(dt.timezone.utc)
+        window = f"{today:%Y%m%d}-{today + dt.timedelta(days=7):%Y%m%d}"
+        try:
+            espn_clips = self.espn.fetch_nfl_highlights(dates=window)
+        except Exception as exc:
+            log.warning("ESPN highlights failed: %s", exc)
+            espn_clips = None
+        if espn_clips is None:
+            had_error = True
+        else:
+            for c in espn_clips:
+                rows.append({**c, "season": self.espn.season, "synced_at": now})
+
+        # Secondary: Highlightly (only when enabled and it returns NFL clips).
+        if highlightly_client.enabled():
+            client = highlightly_client.HighlightlyClient()
+            clips = client.fetch_highlights(self.espn.season)
+            if clips is None:
+                had_error = True
+            else:
+                seen = {r["provider_id"] for r in rows}
+                for c in clips:
+                    row = highlightly_client.to_row(c, self.espn.season)
+                    if row and row["provider_id"] not in seen:
+                        rows.append({**row, "synced_at": now})
+                        seen.add(row["provider_id"])
+
         if rows:
             keep = ",".join(f'"{r["provider_id"]}"' for r in rows)
             self.db.upsert("game_highlights", rows, on_conflict="provider_id")
             self.db.delete("game_highlights", f"provider_id=not.in.({keep})")
-        else:
-            # Fetched fine but no NFL clips right now — clear any stale rows
-            # (e.g. leftover college clips) so the reel isn't misleading.
+        elif not had_error:
+            # Everything fetched fine but there are no NFL clips right now —
+            # clear stale rows (e.g. expired clips) so the reel isn't misleading.
             self.db.delete("game_highlights", "provider_id=neq.__none__")
-        log.info("Stored %d NFL highlight clips", len(rows))
+        # else: a source errored and returned nothing — keep last-good data.
+        log.info("Stored %d NFL highlight clips (%d from ESPN)",
+                 len(rows), sum(1 for r in rows if r.get("source") == "ESPN"))
 
     def write_game_analysis(self) -> None:
         """Gamecast writeups for every current-week matchup (throttled)."""

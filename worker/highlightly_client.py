@@ -91,26 +91,10 @@ class HighlightlyClient:
                      params, len(items), self._nfl_count(items))
             if items:
                 return items
-        # Nothing NFL. Probe the unfiltered feed across several pages so the
-        # logs show every American-football league Highlightly currently
-        # carries (and how deep any NFL preseason clips might sit) — this
-        # distinguishes "preseason: no NFL clips yet" from "plan/data gap".
-        league_counts: dict[str, int] = {}
-        for offset in (0, 40, 80, 120, 160):
-            try:
-                _, _, data = self._get("highlights", {"limit": self.LIMIT, "offset": offset})
-            except requests.RequestException as exc:
-                log.warning("Highlightly probe failed (offset=%d): %s", offset, exc)
-                break
-            page = self._items(data)
-            for c in page:
-                if isinstance(c, dict):
-                    lg = str(((c.get("match") or {}).get("league")) or "?")
-                    league_counts[lg] = league_counts.get(lg, 0) + 1
-            if len(page) < self.LIMIT:
-                break  # last page
-        log.info("Highlightly unfiltered probe -> league_counts=%s", league_counts)
-        return []  # no NFL clips available yet; caller clears any stale rows
+        # No NFL clips. (As of the 2026 preseason Highlightly's american-football
+        # feed is entirely NCAA; ESPN is the working NFL source.) The caller
+        # clears any stale rows.
+        return []
 
 
 # --- Mapping (verify against game_highlights.raw after first sync) -----------

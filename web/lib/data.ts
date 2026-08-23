@@ -92,7 +92,7 @@ async function supabaseBundle(): Promise<Bundle | null> {
       rest(`recaps?select=*&league_id=eq.${lid}&order=week`),
       rest(`nfl_games?select=*&order=kickoff`),
       rest(`game_analysis?select=*&league_id=eq.${lid}&week=eq.${(leagues[0] as any).current_week}`),
-      rest(`game_highlights?select=provider_id,title,url,embed_url,thumbnail_url,source,home_team,away_team,kind&order=synced_at.desc`),
+      rest(`game_highlights?select=provider_id,title,url,embed_url,thumbnail_url,source,home_team,away_team,kind,espn_event_id&order=synced_at.desc`),
     ]);
 
   const seasons: SeasonSlice[] = (leagues as any[]).map((lg) => ({
@@ -188,6 +188,7 @@ async function supabaseBundle(): Promise<Bundle | null> {
       homeTeam: h.home_team,
       awayTeam: h.away_team,
       kind: h.kind,
+      espnEventId: h.espn_event_id ?? null,
     })),
     demo: false,
   };
