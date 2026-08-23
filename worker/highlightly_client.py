@@ -55,13 +55,10 @@ class HighlightlyClient:
         except ValueError:
             return resp.status_code, body, None
 
-    def fetch_highlights(self, season: int, limit: int = 40) -> list[dict]:
-        """Recent NFL highlight clips. Returns the raw list; mapping to rows is
-        done by the caller so the raw payload can be stored for verification.
-
-        Diagnostics: on an empty or unexpected result the raw response shape is
-        logged so the correct params/paths can be confirmed against the real
-        API (which the sandbox can't reach directly)."""
+    def fetch_highlights(self, season: int, limit: int = 100) -> list[dict]:
+        """Recent NFL highlight clips. The american-football endpoint mixes NFL
+        and NCAA, so we over-fetch and let the caller keep NFL. Returns the raw
+        list; mapping is done by the caller so the raw payload is preserved."""
         status, body, data = self._get("highlights", {"limit": limit})
         items = []
         if isinstance(data, dict):
@@ -71,9 +68,6 @@ class HighlightlyClient:
         if not items:
             log.warning("Highlightly returned no highlights (status %d). "
                         "Response head: %s", status, body[:600])
-        else:
-            log.info("Highlightly first item keys: %s", list(items[0].keys())
-                     if isinstance(items[0], dict) else type(items[0]))
         return items
 
 
@@ -87,27 +81,48 @@ def _first(d: dict, *keys):
     return None
 
 
+def _youtube_embed(url: str | None) -> str | None:
+    """Turn a YouTube watch URL into an embeddable one. Highlightly serves clips
+    from YouTube; most items omit embedUrl but always carry a watch url."""
+    if not url:
+        return None
+    vid = None
+    if "watch?v=" in url:
+        vid = url.split("watch?v=", 1)[1].split("&", 1)[0]
+    elif "youtu.be/" in url:
+        vid = url.split("youtu.be/", 1)[1].split("?", 1)[0]
+    elif "/embed/" in url:
+        return url
+    return f"https://www.youtube.com/embed/{vid}" if vid else None
+
+
+def _team_name(t) -> str | None:
+    if isinstance(t, dict):
+        return t.get("displayName") or t.get("name")
+    return t
+
+
 def to_row(clip: dict, season: int) -> dict | None:
-    """Normalize one Highlightly clip to a game_highlights row. Tolerant of the
-    common field-name variants; raw payload is kept for tightening later."""
+    """Normalize one Highlightly clip to a game_highlights row. Keeps NFL only
+    (the endpoint also returns NCAA); raw payload is preserved."""
     provider_id = _first(clip, "id", "_id", "highlightId")
     if not provider_id:
         return None
     match = clip.get("match") or clip.get("game") or {}
-    home = _first(match, "homeTeam", "home") or _first(clip, "homeTeam", "home")
-    away = _first(match, "awayTeam", "away") or _first(clip, "awayTeam", "away")
-    home = home.get("name") if isinstance(home, dict) else home
-    away = away.get("name") if isinstance(away, dict) else away
+    league = (match.get("league") or clip.get("league") or "").upper()
+    if league and league != "NFL":
+        return None  # drop college / other leagues
+    url = _first(clip, "url", "link", "videoUrl")
     return {
         "season": season,
         "provider_id": str(provider_id),
         "title": _first(clip, "title", "description", "name") or "NFL highlight",
-        "url": _first(clip, "url", "link", "source", "videoUrl"),
-        "embed_url": _first(clip, "embedUrl", "embed_url", "embed"),
-        "thumbnail_url": _first(clip, "thumbnail", "thumbnailUrl", "imgUrl", "image"),
-        "source": _first(clip, "source", "channel", "provider"),
-        "home_team": home,
-        "away_team": away,
-        "kind": _first(clip, "type", "kind") or "highlight",
+        "url": url,
+        "embed_url": _first(clip, "embedUrl", "embed_url", "embed") or _youtube_embed(url),
+        "thumbnail_url": _first(clip, "imgUrl", "thumbnail", "thumbnailUrl", "image"),
+        "source": _first(clip, "channel", "source", "provider"),
+        "home_team": _team_name(_first(match, "homeTeam", "home")),
+        "away_team": _team_name(_first(match, "awayTeam", "away")),
+        "kind": _first(clip, "category", "type", "kind") or "highlight",
         "raw": clip,
     }

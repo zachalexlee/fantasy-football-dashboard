@@ -151,7 +151,13 @@ class EspnClient:
         params: list[tuple[str, str]] = []
         if week is not None:
             params += [("seasontype", "2"), ("week", str(week)), ("dates", str(self.season))]
-        data = self._get(url, params)
+        # ESPN's public scoreboard 403s the default sync UA on the bare call;
+        # a browser UA is accepted.
+        data = self._get(url, params, headers={
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/125.0 Safari/537.36"),
+        })
         season_type = data.get("season", {}).get("type", 2)
         real_week = data.get("week", {}).get("number", week or 1)
         games = []
