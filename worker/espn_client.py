@@ -230,12 +230,18 @@ class EspnClient:
         stype = sb.get("season", {}).get("type")
         log.info("PROBE scoreboard: season_type=%s events=%d", stype, len(events))
         ids = []
+        dumped = False
         for e in events:
             comp = (e.get("competitions") or [{}])[0]
             hl = comp.get("highlights")
             ids.append(str(e.get("id")))
             if hl:
                 log.info("PROBE inline highlights on %s: %d", e.get("shortName"), len(hl))
+                if not dumped:
+                    import json as _json
+                    log.info("PROBE highlight[0] shape on %s: %s",
+                             e.get("shortName"), _json.dumps(hl[0])[:1400])
+                    dumped = True
         # 2) gamepackage for the first few games — richest video source
         for gid in ids[:3]:
             try:
