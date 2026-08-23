@@ -70,18 +70,16 @@ class HighlightlyClient:
                    and str(((c.get("match") or {}).get("league")) or "").upper() == "NFL")
 
     def fetch_highlights(self, season: int) -> list[dict] | None:
-        """NFL highlight clips. The american-football feed mixes NFL + NCAA and
-        exposes no documented league-id endpoint, so we try a few server-side
-        filters and keep the first that yields NFL clips (logging each so the
-        working filter is visible). Returns the raw list on success, or None on
-        a request error so the caller keeps last-good data."""
+        """NFL highlight clips, filtered to the NFL league server-side
+        (leagueName=NFL, confirmed working). Tries the current season first,
+        then unscoped, and returns the first non-empty result. Returns the raw
+        list (possibly empty — Highlightly has no NFL clips in the preseason
+        window) on success, or None on a request error so the caller keeps
+        last-good data."""
         attempts = [
             {"limit": self.LIMIT, "leagueName": "NFL", "season": season},
             {"limit": self.LIMIT, "leagueName": "NFL"},
-            {"limit": self.LIMIT, "season": season},
-            {"limit": self.LIMIT},
         ]
-        last: list = []
         for params in attempts:
             try:
                 _, _, data = self._get("highlights", params)
@@ -89,12 +87,11 @@ class HighlightlyClient:
                 log.warning("Highlightly fetch failed (%s): %s", params, exc)
                 return None
             items = self._items(data)
-            nfl = self._nfl_count(items)
-            log.info("Highlightly %s -> %d items, %d NFL", params, len(items), nfl)
-            last = items
-            if nfl:
+            log.info("Highlightly %s -> %d items, %d NFL",
+                     params, len(items), self._nfl_count(items))
+            if items:
                 return items
-        return last  # no NFL right now; to_row filters, caller clears stale
+        return []  # no NFL clips available yet; caller clears any stale rows
 
 
 # --- Mapping (verify against game_highlights.raw after first sync) -----------
