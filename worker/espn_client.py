@@ -207,6 +207,58 @@ class EspnClient:
             })
         return games
 
+    def probe_highlights(self) -> None:
+        """TEMP diagnostic: does ESPN expose preseason highlight video? Logs
+        what video/highlight content the public CDN feeds carry so we can
+        decide whether to build an ESPN highlight source. Remove after use."""
+        headers = {
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/125.0 Safari/537.36"),
+            "Accept": "application/json, text/plain, */*",
+            "Referer": "https://www.espn.com/nfl/scoreboard",
+        }
+        # 1) scoreboard — grab event ids + any inline highlights
+        try:
+            r = self.session.get("https://cdn.espn.com/core/nfl/scoreboard",
+                                 params=[("xhr", "1")], headers=headers, timeout=30)
+            sb = (r.json().get("content", {}) or {}).get("sbData", {})
+        except Exception as exc:
+            log.warning("PROBE scoreboard failed: %s", exc)
+            return
+        events = sb.get("events", []) or []
+        stype = sb.get("season", {}).get("type")
+        log.info("PROBE scoreboard: season_type=%s events=%d", stype, len(events))
+        ids = []
+        for e in events:
+            comp = (e.get("competitions") or [{}])[0]
+            hl = comp.get("highlights")
+            ids.append(str(e.get("id")))
+            if hl:
+                log.info("PROBE inline highlights on %s: %d", e.get("shortName"), len(hl))
+        # 2) gamepackage for the first few games — richest video source
+        for gid in ids[:3]:
+            try:
+                r = self.session.get("https://cdn.espn.com/core/nfl/game",
+                                     params=[("xhr", "1"), ("gameId", gid)],
+                                     headers=headers, timeout=30)
+                gp = (r.json().get("gamepackageJSON", {}) or {})
+            except Exception as exc:
+                log.warning("PROBE game %s failed: %s", gid, exc)
+                continue
+            vids = gp.get("videos") or []
+            hls = gp.get("highlights") or []
+            sample = None
+            pool = vids or hls
+            if pool and isinstance(pool[0], dict):
+                v = pool[0]
+                links = v.get("links") or {}
+                sample = {"headline": v.get("headline") or v.get("title"),
+                          "has_source": bool(links.get("source") or v.get("source")),
+                          "keys": list(v.keys())[:10]}
+            log.info("PROBE game %s: videos=%d highlights=%d sample=%s",
+                     gid, len(vids), len(hls), sample)
+
     def fetch_history(self, season: int, views: list[str]) -> dict:
         """Prior seasons. 2018+ live on the normal per-season endpoint;
         only pre-2018 seasons use leagueHistory (which 404s for newer ones)."""

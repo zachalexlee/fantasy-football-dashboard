@@ -477,6 +477,10 @@ class Sync:
         are dropped so the tab only ever shows what's on this window."""
         # A one-week window around today = "what's on now/soon"; avoids the
         # 403 ESPN returns for the parameter-less current-slate call.
+        try:
+            self.espn.probe_highlights()  # TEMP: assess ESPN preseason highlight video
+        except Exception as exc:
+            log.warning("probe_highlights errored: %s", exc)
         today = dt.datetime.now(dt.timezone.utc)
         window = f"{today:%Y%m%d}-{today + dt.timedelta(days=7):%Y%m%d}"
         games = self.espn.fetch_nfl_scoreboard(dates=window)
