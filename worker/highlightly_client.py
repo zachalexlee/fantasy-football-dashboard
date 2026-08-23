@@ -42,19 +42,39 @@ class HighlightlyClient:
             "x-rapidapi-key": self.key,
         })
 
-    def _get(self, path: str, params: dict) -> dict | list:
-        resp = self.session.get(f"{self.base}/{SPORT_PATH}/{path}", params=params, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
+    def _get(self, path: str, params: dict) -> tuple[int, str, object]:
+        url = f"{self.base}/{SPORT_PATH}/{path}"
+        resp = self.session.get(url, params=params, timeout=30)
+        body = resp.text
+        log.info("Highlightly GET %s params=%s -> %d (%d bytes)",
+                 url, params, resp.status_code, len(body))
+        if resp.status_code >= 400:
+            log.warning("Highlightly error body: %s", body[:500])
+        try:
+            return resp.status_code, body, resp.json()
+        except ValueError:
+            return resp.status_code, body, None
 
     def fetch_highlights(self, season: int, limit: int = 40) -> list[dict]:
         """Recent NFL highlight clips. Returns the raw list; mapping to rows is
-        done by the caller so the raw payload can be stored for verification."""
-        data = self._get("highlights", {"season": season, "limit": limit})
-        # Highlightly wraps lists as {"data": [...]}; tolerate a bare list too.
+        done by the caller so the raw payload can be stored for verification.
+
+        Diagnostics: on an empty or unexpected result the raw response shape is
+        logged so the correct params/paths can be confirmed against the real
+        API (which the sandbox can't reach directly)."""
+        status, body, data = self._get("highlights", {"limit": limit})
+        items = []
         if isinstance(data, dict):
-            return data.get("data") or data.get("highlights") or []
-        return data or []
+            items = data.get("data") or data.get("highlights") or data.get("results") or []
+        elif isinstance(data, list):
+            items = data
+        if not items:
+            log.warning("Highlightly returned no highlights (status %d). "
+                        "Response head: %s", status, body[:600])
+        else:
+            log.info("Highlightly first item keys: %s", list(items[0].keys())
+                     if isinstance(items[0], dict) else type(items[0]))
+        return items
 
 
 # --- Mapping (verify against game_highlights.raw after first sync) -----------
