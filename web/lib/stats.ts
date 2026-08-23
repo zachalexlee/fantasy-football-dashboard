@@ -135,7 +135,7 @@ export function headToHead(bundle: Bundle) {
 // Cross-season (franchise) reports. Managers are matched across seasons by
 // ESPN owner guid, falling back to display name for very old seasons.
 
-const franchiseKey = (t: Team) => t.ownerGuid ?? t.ownerName ?? t.name;
+export const franchiseKey = (t: Team) => t.ownerGuid ?? t.ownerName ?? t.name;
 
 export type Franchise = {
   key: string;
@@ -159,7 +159,7 @@ export type Franchise = {
 /** A season counts once games were played or a final rank exists. */
 const seasonCounts = (t: Team) => t.wins + t.losses + t.ties > 0 || (t.finalRank ?? 0) > 0;
 
-export function franchises(bundle: Bundle): Franchise[] {
+export function franchises(bundle: { seasons: SeasonSlice[] }): Franchise[] {
   const map = new Map<string, Franchise>();
   bundle.seasons.forEach((slice, si) => {
     for (const t of slice.teams) {
@@ -206,7 +206,7 @@ export const winPct = (f: { wins: number; losses: number; ties: number }) => {
   return g ? (f.wins + f.ties * 0.5) / g : 0;
 };
 
-export function championshipHistory(bundle: Bundle) {
+export function championshipHistory(bundle: { seasons: SeasonSlice[] }) {
   return bundle.seasons
     .filter((s) => s.teams.some((t) => (t.finalRank ?? 0) > 0))
     .map((s) => ({
@@ -217,15 +217,16 @@ export function championshipHistory(bundle: Bundle) {
     .sort((a, b) => b.season - a.season);
 }
 
-export type AllTimePerf = { season: number; week: number; teamName: string; oppAbbrev: string; points: number };
+export type AllTimePerf = { season: number; week: number; teamName: string; oppAbbrev: string; points: number; key: string };
 export type AllTimeGame = {
   season: number; week: number; margin: number;
   homeAbbrev: string; awayAbbrev: string; homeScore: number; awayScore: number; homeWon: boolean;
+  homeKey: string; awayKey: string;
 };
 
 /** Record book across every synced season. Zero-score placeholder games
  * (unplayed old consolation slots) are excluded. */
-export function recordBookAllTime(bundle: Bundle) {
+export function recordBookAllTime(bundle: { seasons: SeasonSlice[] }, only?: string) {
   const perfs: AllTimePerf[] = [];
   const games: AllTimeGame[] = [];
   for (const slice of bundle.seasons) {
@@ -238,8 +239,8 @@ export function recordBookAllTime(bundle: Bundle) {
       if (!home || !away) continue;
       const base = { season: slice.league.season, week: m.week };
       perfs.push(
-        { ...base, teamName: home.name, oppAbbrev: away.abbrev, points: m.homeScore },
-        { ...base, teamName: away.name, oppAbbrev: home.abbrev, points: m.awayScore }
+        { ...base, teamName: home.name, oppAbbrev: away.abbrev, points: m.homeScore, key: franchiseKey(home) },
+        { ...base, teamName: away.name, oppAbbrev: home.abbrev, points: m.awayScore, key: franchiseKey(away) }
       );
       games.push({
         ...base,
@@ -247,37 +248,44 @@ export function recordBookAllTime(bundle: Bundle) {
         homeAbbrev: home.abbrev, awayAbbrev: away.abbrev,
         homeScore: m.homeScore, awayScore: m.awayScore,
         homeWon: m.winnerId === m.homeTeamId,
+        homeKey: franchiseKey(home), awayKey: franchiseKey(away),
       });
     }
   }
-  const realPerfs = perfs.filter((p) => p.points > 0);
+  // `only` narrows to one franchise BEFORE the top-N cut, so a filtered
+  // manager keeps a full list instead of whatever survived the global top-8.
+  const myPerfs = only ? perfs.filter((p) => p.key === only) : perfs;
+  const myGames = only ? games.filter((g) => g.homeKey === only || g.awayKey === only) : games;
+  const realPerfs = myPerfs.filter((p) => p.points > 0);
   return {
-    topScores: [...perfs].sort((a, b) => b.points - a.points).slice(0, 8),
+    topScores: [...myPerfs].sort((a, b) => b.points - a.points).slice(0, 8),
     lowScores: [...realPerfs].sort((a, b) => a.points - b.points).slice(0, 8),
-    blowouts: [...games].sort((a, b) => b.margin - a.margin).slice(0, 6),
-    nailbiters: [...games].sort((a, b) => a.margin - b.margin).slice(0, 6),
+    blowouts: [...myGames].sort((a, b) => b.margin - a.margin).slice(0, 6),
+    nailbiters: [...myGames].sort((a, b) => a.margin - b.margin).slice(0, 6),
   };
 }
 
 /** Best single seasons: points-for and record. */
-export function seasonBests(bundle: Bundle) {
+export function seasonBests(bundle: { seasons: SeasonSlice[] }, only?: string) {
   const rows = bundle.seasons.flatMap((s) =>
     s.teams.filter(seasonCounts).map((t) => ({
       season: s.league.season,
       team: t,
+      key: franchiseKey(t),
       pf: t.pointsFor,
       pct: winPct(t),
       record: { wins: t.wins, losses: t.losses, ties: t.ties },
     }))
   );
+  const mine = only ? rows.filter((r) => r.key === only) : rows;
   return {
-    topPF: [...rows].sort((a, b) => b.pf - a.pf).slice(0, 6),
-    bestRecords: [...rows].sort((a, b) => b.pct - a.pct || b.pf - a.pf).slice(0, 6),
+    topPF: [...mine].sort((a, b) => b.pf - a.pf).slice(0, 6),
+    bestRecords: [...mine].sort((a, b) => b.pct - a.pct || b.pf - a.pf).slice(0, 6),
   };
 }
 
 /** All-time head-to-head between franchises (regular season + playoffs). */
-export function franchiseH2H(bundle: Bundle) {
+export function franchiseH2H(bundle: { seasons: SeasonSlice[] }) {
   const cells = new Map<string, ScheduleCell>();
   const bump = (a: string, b: string, field: keyof ScheduleCell) => {
     const key = `${a}|${b}`;
