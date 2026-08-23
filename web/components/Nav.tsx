@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 
 const LINKS = [
   ["/", "Home"],
@@ -20,8 +21,15 @@ const LINKS = [
 
 export default function Nav() {
   const pathname = usePathname();
+  const activeRef = useRef<HTMLAnchorElement>(null);
+
+  // Keep the current tab visible in the horizontally-scrolling nav on mobile.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [pathname]);
+
   return (
-    <nav className="table-scroll -mx-4 px-4">
+    <nav className="table-scroll -mx-4 px-4" aria-label="Primary">
       <ul className="flex gap-1 whitespace-nowrap pb-1">
         {LINKS.map(([href, label]) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -29,6 +37,8 @@ export default function Nav() {
             <li key={href}>
               <Link
                 href={href}
+                ref={active ? activeRef : undefined}
+                aria-current={active ? "page" : undefined}
                 className={`inline-block rounded-full px-3 py-1.5 text-sm font-semibold ${
                   active
                     ? "bg-accent text-white"

@@ -52,6 +52,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
       </head>
       <body className="min-h-screen">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+        >
+          Skip to content
+        </a>
         <header className="border-b border-hairline bg-surface">
           <div className="mx-auto max-w-6xl px-4 pt-4">
             <div className="flex items-center justify-between gap-3 pb-3">
@@ -66,7 +72,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Nav />
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+        <main id="main" className="mx-auto max-w-6xl px-4 py-6">{children}</main>
         <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 pb-8 pt-4 text-xs text-muted">
           <SyncBadge syncedAt={league.syncedAt} demo={bundle.demo} />
           <span>Data via ESPN Fantasy · not affiliated with ESPN</span>

@@ -46,6 +46,31 @@ export default async function Waivers() {
     .sort((a, b) => b.week - a.week || (b.faabBid ?? 0) - (a.faabBid ?? 0))
     .slice(0, 40);
 
+  // Each traded player is stored as an "in" under its receiving team, so
+  // grouping a trade's rows (same executedAt) reconstructs both sides: who
+  // gave up whom to get whom.
+  const tradeGroups = new Map<string, typeof bundle.transactions>();
+  for (const tx of bundle.transactions) {
+    if (tx.type !== "TRADE") continue;
+    const key = tx.executedAt ?? tx.id;
+    if (!tradeGroups.has(key)) tradeGroups.set(key, []);
+    tradeGroups.get(key)!.push(tx);
+  }
+  const trades = [...tradeGroups.values()]
+    .map((txs) => {
+      const byTeam = new Map<string, string[]>();
+      for (const r of txs) {
+        const name = player(r.playerInId)?.name;
+        if (!r.teamId || !name) continue;
+        if (!byTeam.has(r.teamId)) byTeam.set(r.teamId, []);
+        byTeam.get(r.teamId)!.push(name);
+      }
+      return { week: txs[0].week, executedAt: txs[0].executedAt, byTeam };
+    })
+    .filter((t) => t.byTeam.size >= 2)
+    .sort((a, b) => (b.executedAt ?? "").localeCompare(a.executedAt ?? ""))
+    .slice(0, 10);
+
   return (
     <div className="space-y-8">
       <section>
@@ -104,6 +129,43 @@ export default async function Waivers() {
           {hasFaab ? " — did that $37 bid actually produce?" : "."}
         </p>
       </section>
+
+      {trades.length > 0 && (
+        <section>
+          <h3 className="mb-3 font-bold">🔀 Recent trades</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {trades.map((tr, i) => {
+              const sides = [...tr.byTeam.entries()];
+              return (
+                <div key={i} className="card p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="kicker">Week {tr.week}</span>
+                    <span className="text-xs text-muted">
+                      {sides.map(([tid]) => team(tid)?.abbrev ?? "?").join(" ⇄ ")}
+                    </span>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {sides.map(([tid, names]) => (
+                      <div key={tid}>
+                        <Link href={`/teams/${tid}`} className="text-sm font-semibold hover:underline">
+                          {team(tid)?.name ?? "?"}
+                        </Link>
+                        <ul className="mt-0.5 space-y-0.5">
+                          {names.map((n) => (
+                            <li key={n} className="text-xs text-goodtext">
+                              + {n}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <div className="grid gap-8 lg:grid-cols-2">
         <section>
