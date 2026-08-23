@@ -8,6 +8,9 @@ export type League = {
   regularSeasonWeeks: number;
   faabBudget: number | null;
   syncedAt: string | null;
+  // Raw ESPN scoring + settings blobs (surfaced on the Rules page).
+  scoring: Record<string, unknown> | null;
+  settings: Record<string, unknown> | null;
 };
 
 export type Team = {
@@ -64,6 +67,19 @@ export type RosterSlot = {
   isStarter: boolean;
   points: number;
   projected: number | null;
+  stats: Record<string, number> | null; // parsed stat line (passYds, rushTD, …)
+};
+
+export type PendingTransaction = {
+  espnTxId: string;
+  type: string; // WAIVER | FREEAGENT | TRADE_PROPOSAL
+  teamId: string | null;
+  relatedTeamId: string | null;
+  playerInId: string | null;
+  playerOutId: string | null;
+  faabBid: number | null;
+  proposedAt: string | null;
+  processDate: string | null;
 };
 
 export type Transaction = {
@@ -83,6 +99,7 @@ export type DraftPick = {
   round: number;
   pick: number;
   keeper: boolean;
+  bidAmount: number | null; // auction value; null for snake drafts
 };
 
 export type Stat = {
@@ -175,6 +192,7 @@ export type Bundle = {
   players: Player[];
   rosterSlots: RosterSlot[];
   transactions: Transaction[];
+  pendingTransactions: PendingTransaction[];
   draftPicks: DraftPick[];
   stats: Stat[];
   recaps: Recap[];

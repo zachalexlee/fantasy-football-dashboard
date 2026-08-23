@@ -17,6 +17,7 @@ const LINKS = [
   ["/recaps", "Recaps"],
   ["/draft", "Draft"],
   ["/history", "History"],
+  ["/rules", "Rules"],
 ] as const;
 
 export default function Nav() {

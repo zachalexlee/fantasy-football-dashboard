@@ -17,7 +17,7 @@ import highlightly_client
 import recap as recap_mod
 from db import Db
 from espn_client import (POSITION_BY_ID, PRO_TEAMS, SLOT_BY_ID, EspnClient,
-                         headshot_url)
+                         headshot_url, parse_stat_line)
 
 log = logging.getLogger("sync")
 
@@ -252,7 +252,7 @@ class Sync:
                         slot_id = slot_entry.get("lineupSlotId", 20)
                         is_starter = slot_id in STARTER_SLOT_IDS
                         points = ppe.get("appliedStatTotal", 0) or 0
-                        projected, played = None, False
+                        projected, played, stat_line = None, False, {}
                         for stat in player.get("stats", []):
                             if stat.get("scoringPeriodId") != week:
                                 continue
@@ -260,6 +260,7 @@ class Sync:
                                 projected = stat.get("appliedTotal")
                             elif stat.get("statSourceId") == 0:
                                 played = True
+                                stat_line = parse_stat_line(stat.get("stats"))
                         if is_starter:
                             proj_sum += projected or 0
                             live_sum += points
@@ -273,6 +274,7 @@ class Sync:
                             "is_starter": is_starter,
                             "points": round(points, 2),
                             "projected": projected,
+                            "stats": stat_line or None,
                         })
                     projections[team_entry.get("teamId")] = round(proj_sum, 2)
                     yet_to_play[team_entry.get("teamId")] = ytp
@@ -287,6 +289,7 @@ class Sync:
                 "is_starter": r["is_starter"],
                 "points": r["points"],
                 "projected": r["projected"],
+                "stats": r["stats"],
             } for r in roster_rows if r["espn_team_id"] in self.team_uuid
                 and r["espn_player_id"] in self.player_uuid],
                 on_conflict="team_id,week,player_id")
@@ -412,6 +415,73 @@ class Sync:
                 })
         self.db.upsert("transactions", rows, on_conflict="espn_tx_id")
 
+    def fetch_pending(self) -> None:
+        """Not-yet-processed waiver claims and trade proposals. These are
+        ephemeral (they process or get canceled), so the set is replaced each
+        sync rather than accumulated."""
+        lid = self.league_row["id"]
+        data = self.espn.fetch_views(["mPendingTransactions"])
+        rows = []
+
+        def player_ref(item: dict | None) -> str | None:
+            return self.player_uuid.get(item.get("playerId")) if item else None
+
+        for tx in data.get("transactions", []):
+            if tx.get("status") not in ("PENDING", "OPEN", "PROPOSED"):
+                continue
+            tx_type = tx.get("type", "")
+            items = tx.get("items", [])
+            adds = [i for i in items if i.get("type") in ("ADD", "TRADE")]
+            drops = [i for i in items if i.get("type") == "DROP"]
+            proposed = tx.get("proposedDate")
+            process = tx.get("processDate")
+            proposed_at = (dt.datetime.fromtimestamp(proposed / 1000, dt.timezone.utc).isoformat()
+                           if proposed else None)
+            process_at = (dt.datetime.fromtimestamp(process / 1000, dt.timezone.utc).isoformat()
+                          if process else None)
+            base = {
+                "league_id": lid,
+                "proposed_at": proposed_at,
+                "process_date": process_at,
+            }
+            if tx_type in ("TRADE", "TRADE_PROPOSAL"):
+                # One row per traded player (received side) so the UI can group
+                # the proposal and show both hauls.
+                for i, item in enumerate(adds):
+                    to_team = self.team_uuid.get(item.get("toTeamId"))
+                    if not to_team:
+                        continue
+                    rows.append({
+                        **base,
+                        "espn_tx_id": f"pend-{tx.get('id')}-{i}",
+                        "type": "TRADE_PROPOSAL",
+                        "team_id": to_team,
+                        "related_team_id": self.team_uuid.get(item.get("fromTeamId")),
+                        "player_in_id": player_ref(item),
+                        "player_out_id": None,
+                        "faab_bid": None,
+                    })
+            else:
+                team_id = self.team_uuid.get(tx.get("teamId"))
+                if not team_id:
+                    continue
+                rows.append({
+                    **base,
+                    "espn_tx_id": f"pend-{tx.get('id')}",
+                    "type": tx_type or "WAIVER",
+                    "team_id": team_id,
+                    "related_team_id": None,
+                    "player_in_id": player_ref(adds[0] if adds else None),
+                    "player_out_id": player_ref(drops[0] if drops else None),
+                    "faab_bid": tx.get("bidAmount"),
+                })
+
+        # Replace the whole pending set (it's short-lived by nature).
+        self.db.delete("pending_transactions", f"league_id=eq.{lid}")
+        if rows:
+            self.db.upsert("pending_transactions", rows, on_conflict="espn_tx_id")
+        log.info("Stored %d pending transactions", len(rows))
+
     def fetch_players(self) -> None:
         """Top ~300 by ownership from kona_player_info (waiver targets, trending)."""
         pool = self.espn.fetch_player_pool(limit=300)
@@ -426,6 +496,7 @@ class Sync:
             player_id = self.player_uuid.get(p.get("playerId"))
             if not team_id or not player_id:
                 continue
+            bid = p.get("bidAmount")
             rows.append({
                 "league_id": self.league_row["id"],
                 "team_id": team_id,
@@ -433,6 +504,7 @@ class Sync:
                 "round": p.get("roundId", 0),
                 "pick": p.get("overallPickNumber", 0),
                 "keeper": bool(p.get("keeper")),
+                "bid_amount": bid if bid else None,
             })
         self.db.upsert("draft_picks", rows, on_conflict="league_id,pick")
 
@@ -622,7 +694,7 @@ class Sync:
         # (which run off last-good data), and the gamecast extras never block
         # the core sync either.
         for step in (self.backfill_history, self.fetch_players,
-                     self.fetch_transactions, self.fetch_draft,
+                     self.fetch_transactions, self.fetch_pending, self.fetch_draft,
                      self.compute_all, self.fetch_nfl,
                      self.write_game_analysis, self.fetch_highlights):
             try:

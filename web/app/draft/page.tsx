@@ -1,11 +1,17 @@
+import Link from "next/link";
 import { getBundle } from "@/lib/data";
 import { fmtPts } from "@/lib/format";
-import { playerById, teamById } from "@/lib/stats";
+import { playerById, standings, teamById } from "@/lib/stats";
 
 export const metadata = { title: "Draft" };
 
-export default async function Draft() {
+export default async function Draft({
+  searchParams,
+}: {
+  searchParams: Promise<{ team?: string }>;
+}) {
   const bundle = await getBundle();
+  const { team: teamFilter } = await searchParams;
   const team = teamById(bundle);
   const player = playerById(bundle);
 
@@ -51,12 +57,22 @@ export default async function Draft() {
   const steals = [...valued].sort((a, b) => b.delta - a.delta).slice(0, 6);
   const busts = [...valued].sort((a, b) => a.delta - b.delta).slice(0, 6);
   const rounds = [...new Set(picks.map((p) => p.round))].sort((a, b) => a - b);
+  const isAuction = valued.some((p) => p.bidAmount != null);
+  const boardTeams = standings(bundle);
+  const selectedTeam = teamFilter && bundle.teams.some((t) => t.id === teamFilter) ? teamFilter : null;
 
   const PickLine = ({ p }: { p: (typeof valued)[number] }) => (
     <li className="flex items-center gap-3 px-3 py-2 text-sm">
-      <span className="tnum w-9 shrink-0 text-xs text-muted">#{p.pick}</span>
+      <span className="tnum w-9 shrink-0 text-xs text-muted">
+        {isAuction ? `$${p.bidAmount ?? 0}` : `#${p.pick}`}
+      </span>
       <div className="min-w-0 flex-1">
         <span className="font-semibold">{player(p.playerId)?.name ?? "?"}</span>
+        {p.keeper && (
+          <span className="ml-1.5 rounded bg-accentsoft px-1 py-0.5 text-[9px] font-bold uppercase text-accent" title="Kept from last season">
+            K
+          </span>
+        )}
         <span className="ml-1.5 text-xs text-muted">
           {player(p.playerId)?.position} → {team(p.teamId)?.abbrev}
         </span>
@@ -73,7 +89,8 @@ export default async function Draft() {
       <div>
         <h2 className="mb-1 text-lg font-extrabold tracking-tight">Draft recap &amp; value board</h2>
         <p className="text-sm text-ink2">
-          Draft slot vs. season production. +N = producing N spots better than draft position.
+          {isAuction ? "Auction values" : "Draft slot"} vs. season production. +N = producing N spots
+          better than draft position.
         </p>
       </div>
 
@@ -89,21 +106,57 @@ export default async function Draft() {
       </div>
 
       <section>
-        <h3 className="mb-3 font-bold">Full board</h3>
-        <div className="space-y-4">
-          {rounds.map((r) => (
-            <div key={r}>
-              <div className="kicker mb-1.5">Round {r}</div>
-              <ul className="card divide-y divide-hairline">
-                {valued
-                  .filter((p) => p.round === r)
-                  .map((p) => (
-                    <PickLine key={p.pick} p={p} />
-                  ))}
-              </ul>
-            </div>
-          ))}
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="font-bold">Full board</h3>
         </div>
+        {/* Per-team filter (server-side via ?team=). */}
+        <div className="table-scroll -mx-1 mb-3">
+          <div className="flex gap-1 px-1">
+            <Link
+              href="/draft"
+              className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                selectedTeam ? "bg-surface2 text-ink2" : "bg-accent text-white"
+              }`}
+            >
+              All
+            </Link>
+            {boardTeams.map((t) => (
+              <Link
+                key={t.id}
+                href={`/draft?team=${t.id}`}
+                className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                  selectedTeam === t.id ? "bg-accent text-white" : "bg-surface2 text-ink2"
+                }`}
+              >
+                {t.abbrev}
+              </Link>
+            ))}
+          </div>
+        </div>
+        {selectedTeam ? (
+          <ul className="card divide-y divide-hairline">
+            {valued
+              .filter((p) => p.teamId === selectedTeam)
+              .map((p) => (
+                <PickLine key={p.pick} p={p} />
+              ))}
+          </ul>
+        ) : (
+          <div className="space-y-4">
+            {rounds.map((r) => (
+              <div key={r}>
+                <div className="kicker mb-1.5">Round {r}</div>
+                <ul className="card divide-y divide-hairline">
+                  {valued
+                    .filter((p) => p.round === r)
+                    .map((p) => (
+                      <PickLine key={p.pick} p={p} />
+                    ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

@@ -38,6 +38,41 @@ VIEWS = {
 
 POSITION_BY_ID = {1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST"}
 
+# ESPN fantasy stat ids -> readable keys (subset; the well-established mapping
+# used by the espn-api community library). The raw stat dict is also stored, so
+# any id we don't map here is never lost. `order` drives display order and which
+# stats are shown per position group.
+STAT_ID_MAP: dict[int, str] = {
+    3: "passYds", 4: "passTD", 20: "int",
+    24: "rushYds", 25: "rushTD", 23: "carries",
+    53: "rec", 42: "recYds", 43: "recTD", 58: "targets",
+    72: "fumblesLost",
+}
+
+STAT_LABEL = {
+    "passYds": "Pass yds", "passTD": "Pass TD", "int": "INT",
+    "rushYds": "Rush yds", "rushTD": "Rush TD", "carries": "Carries",
+    "rec": "Rec", "recYds": "Rec yds", "recTD": "Rec TD", "targets": "Tgt",
+    "fumblesLost": "Fum lost",
+}
+
+
+def parse_stat_line(raw: dict | None) -> dict:
+    """Curated, readable stat line from ESPN's {statId: value} actual-game dict.
+    Only non-zero mapped stats are kept; unmapped ids stay in roster_slots.stats
+    only via the raw payload the caller may keep separately."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, float] = {}
+    for sid, val in raw.items():
+        try:
+            key = STAT_ID_MAP.get(int(sid))
+        except (TypeError, ValueError):
+            continue
+        if key and val:
+            out[key] = round(float(val), 1) if key.endswith("Yds") else int(val)
+    return out
+
 SLOT_BY_ID = {
     0: "QB", 2: "RB", 3: "RB/WR", 4: "WR", 5: "WR/TE", 6: "TE", 7: "OP",
     16: "D/ST", 17: "K", 20: "BE", 21: "IR", 23: "FLEX",

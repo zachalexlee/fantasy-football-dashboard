@@ -51,6 +51,8 @@ const mapLeague = (lg: any): League => ({
   regularSeasonWeeks: lg.regular_season_weeks,
   faabBudget: lg.faab_budget,
   syncedAt: lg.synced_at,
+  scoring: lg.scoring_json ?? null,
+  settings: lg.settings_json ?? null,
 });
 
 const mapTeam = (t: any): Team => ({
@@ -92,13 +94,14 @@ async function supabaseBundle(): Promise<Bundle | null> {
   if (!leagues.length) return null; // nothing synced yet — caller falls back to demo
   const lid = (leagues[0] as any).id as string;
 
-  const [allTeams, allMatchups, players, rosterSlots, transactions, draftPicks, stats, recaps, nflGames, gameAnalysis, highlights] =
+  const [allTeams, allMatchups, players, rosterSlots, transactions, pending, draftPicks, stats, recaps, nflGames, gameAnalysis, highlights] =
     await Promise.all([
       rest(`teams?select=*`),
       rest(`matchups?select=*&order=week`),
       safeRest(`players?select=*`),
       safeRest(`roster_slots?select=*`),
       safeRest(`transactions?select=*&league_id=eq.${lid}&order=executed_at.desc`),
+      safeRest(`pending_transactions?select=*&league_id=eq.${lid}&order=process_date`),
       safeRest(`draft_picks?select=*&league_id=eq.${lid}&order=pick`),
       safeRest(`computed_stats?select=*&league_id=eq.${lid}`),
       safeRest(`recaps?select=*&league_id=eq.${lid}&order=week`),
@@ -141,6 +144,7 @@ async function supabaseBundle(): Promise<Bundle | null> {
         isStarter: r.is_starter,
         points: Number(r.points),
         projected: r.projected == null ? null : Number(r.projected),
+        stats: r.stats ?? null,
       })),
     transactions: (transactions as any[]).map((t) => ({
       id: t.id,
@@ -152,12 +156,24 @@ async function supabaseBundle(): Promise<Bundle | null> {
       faabBid: t.faab_bid,
       executedAt: t.executed_at,
     })),
+    pendingTransactions: (pending as any[]).map((p) => ({
+      espnTxId: p.espn_tx_id,
+      type: p.type,
+      teamId: p.team_id,
+      relatedTeamId: p.related_team_id,
+      playerInId: p.player_in_id,
+      playerOutId: p.player_out_id,
+      faabBid: p.faab_bid,
+      proposedAt: p.proposed_at,
+      processDate: p.process_date,
+    })),
     draftPicks: (draftPicks as any[]).map((d) => ({
       teamId: d.team_id,
       playerId: d.player_id,
       round: d.round,
       pick: d.pick,
       keeper: d.keeper,
+      bidAmount: d.bid_amount == null ? null : Number(d.bid_amount),
     })),
     stats: (stats as any[]).map((s) => ({
       teamId: s.team_id,

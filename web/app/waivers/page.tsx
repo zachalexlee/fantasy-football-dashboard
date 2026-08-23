@@ -2,7 +2,7 @@ import Link from "next/link";
 import Meter from "@/components/Meter";
 import TeamMark from "@/components/TeamMark";
 import { getBundle } from "@/lib/data";
-import { fmtPts, fmtSignedPct } from "@/lib/format";
+import { fmtKickoff, fmtPts, fmtSignedPct } from "@/lib/format";
 import { playerById, statLookup, teamById } from "@/lib/stats";
 
 export const metadata = { title: "Waivers" };
@@ -71,6 +71,27 @@ export default async function Waivers() {
     .sort((a, b) => (b.executedAt ?? "").localeCompare(a.executedAt ?? ""))
     .slice(0, 10);
 
+  // Pending (not-yet-processed) claims and trade proposals.
+  const pendingClaims = bundle.pendingTransactions.filter((p) => p.type !== "TRADE_PROPOSAL");
+  const pendingTradeMap = new Map<string, typeof bundle.pendingTransactions>();
+  for (const p of bundle.pendingTransactions) {
+    if (p.type !== "TRADE_PROPOSAL") continue;
+    const key = p.espnTxId.replace(/-\d+$/, "");
+    if (!pendingTradeMap.has(key)) pendingTradeMap.set(key, []);
+    pendingTradeMap.get(key)!.push(p);
+  }
+  const pendingTrades = [...pendingTradeMap.values()].map((rows) => {
+    const byTeam = new Map<string, string[]>();
+    for (const r of rows) {
+      const name = player(r.playerInId)?.name;
+      if (!r.teamId || !name) continue;
+      if (!byTeam.has(r.teamId)) byTeam.set(r.teamId, []);
+      byTeam.get(r.teamId)!.push(name);
+    }
+    return { byTeam };
+  });
+  const hasPending = pendingClaims.length > 0 || pendingTrades.length > 0;
+
   return (
     <div className="space-y-8">
       <section>
@@ -129,6 +150,62 @@ export default async function Waivers() {
           {hasFaab ? " — did that $37 bid actually produce?" : "."}
         </p>
       </section>
+
+      {hasPending && (
+        <section>
+          <h3 className="mb-1 font-bold">⏳ Pending</h3>
+          <p className="mb-3 text-xs text-muted">Claims and trade proposals that haven&apos;t processed yet.</p>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {pendingClaims.length > 0 && (
+              <ul className="card divide-y divide-hairline">
+                {pendingClaims.map((p) => (
+                  <li key={p.espnTxId} className="flex items-center gap-3 px-3 py-2.5 text-sm">
+                    <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warn">
+                      {p.faabBid != null ? "Waiver" : "FA"}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-semibold">{team(p.teamId)?.abbrev ?? "?"}</span>{" "}
+                      {p.playerInId && <span className="text-goodtext">+ {player(p.playerInId)?.name ?? "?"}</span>}
+                      {p.playerOutId && <span className="text-muted"> / − {player(p.playerOutId)?.name}</span>}
+                      {p.processDate && (
+                        <span className="block text-xs text-muted">processes {fmtKickoff(p.processDate)}</span>
+                      )}
+                    </div>
+                    {p.faabBid != null && (
+                      <span className="tnum rounded-full bg-surface2 px-2 py-0.5 text-xs font-bold">${p.faabBid}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {pendingTrades.map((tr, i) => {
+              const sides = [...tr.byTeam.entries()];
+              return (
+                <div key={i} className="card p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="kicker">Proposed trade</span>
+                    <span className="text-xs text-muted">
+                      {sides.map(([tid]) => team(tid)?.abbrev ?? "?").join(" ⇄ ")}
+                    </span>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {sides.map(([tid, names]) => (
+                      <div key={tid}>
+                        <span className="text-sm font-semibold">{team(tid)?.name ?? "?"}</span>
+                        <ul className="mt-0.5 space-y-0.5">
+                          {names.map((n) => (
+                            <li key={n} className="text-xs text-goodtext">+ {n}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {trades.length > 0 && (
         <section>

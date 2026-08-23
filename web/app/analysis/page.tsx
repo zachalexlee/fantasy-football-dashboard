@@ -40,6 +40,21 @@ export default async function Analysis() {
   const order = standings(bundle);
   const book = recordBook(bundle);
 
+  // Worst bench-management weeks: optimal lineup minus what they actually
+  // started (both already computed per team-week).
+  const benchBlunders = bundle.teams
+    .flatMap((t) =>
+      Array.from({ length: through }, (_, i) => i + 1).map((w) => {
+        const optimal = stat(t.id, "optimal_points", w);
+        const actual = stat(t.id, "weekly_score", w);
+        if (optimal == null || actual == null) return null;
+        return { team: t, week: w, left: optimal - actual };
+      })
+    )
+    .filter((x): x is { team: (typeof bundle.teams)[number]; week: number; left: number } => !!x && x.left > 0.05)
+    .sort((a, b) => b.left - a.left)
+    .slice(0, 8);
+
   const luckPoints: LuckPoint[] = [];
   for (const m of bundle.matchups) {
     if (!m.isFinal || !m.awayTeamId) continue;
@@ -230,6 +245,28 @@ export default async function Analysis() {
           </div>
         </div>
       </section>
+
+      {benchBlunders.length > 0 && (
+        <section>
+          <h3 className="mb-1 font-bold">🪑 Left on the bench</h3>
+          <p className="mb-3 text-xs text-muted">
+            The most points a manager benched — optimal lineup minus what they actually started.
+          </p>
+          <ol className="card divide-y divide-hairline">
+            {benchBlunders.map((b, i) => (
+              <li key={i} className="flex items-center gap-3 px-3 py-2.5 text-sm">
+                <span className="tnum w-5 text-center text-xs font-bold text-muted">{i + 1}</span>
+                <TeamMark team={b.team} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <span className="truncate font-semibold">{b.team.name}</span>
+                  <span className="ml-1.5 text-xs text-muted">Week {b.week}</span>
+                </div>
+                <span className="tnum font-bold text-bad">−{fmtPts(b.left)}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
     </div>
   );
 }

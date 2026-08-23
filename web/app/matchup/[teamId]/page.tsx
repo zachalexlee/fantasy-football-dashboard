@@ -5,6 +5,7 @@ import TeamMark from "@/components/TeamMark";
 import { getBundle } from "@/lib/data";
 import { fmtPts, record } from "@/lib/format";
 import { headToHead, playerById, teamById, winProbability } from "@/lib/stats";
+import { statLine } from "@/lib/statline";
 import type { RosterSlot } from "@/lib/types";
 
 // Starter slots, in display order. Bench/IR handled separately.
@@ -66,6 +67,7 @@ export default async function MatchupPage({
     if (!rs) return <div className="flex-1" />;
     const p = player(rs.playerId);
     const done = rs.projected != null && rs.points > 0;
+    const line = statLine(rs.stats);
     return (
       <div className={`flex min-w-0 flex-1 items-center gap-2 ${align === "right" ? "flex-row-reverse text-right" : ""}`}>
         <div className="min-w-0 flex-1">
@@ -74,6 +76,7 @@ export default async function MatchupPage({
             {p?.position} · {p?.nflTeam}
             {p?.injuryStatus ? ` · ${p.injuryStatus[0]}` : ""}
           </div>
+          {line && <div className="truncate text-[11px] text-ink2">{line}</div>}
         </div>
         <div className={`shrink-0 ${align === "right" ? "text-left" : "text-right"}`}>
           <div className="tnum text-sm font-bold">{fmtPts(rs.points)}</div>

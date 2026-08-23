@@ -193,6 +193,7 @@ function buildBundle(): Bundle {
         teamId: t.id, playerId: p.id,
         round, pick: overall++,
         keeper: overall % 47 === 0,
+        bidAmount: null,
       });
     }
   }
@@ -250,7 +251,7 @@ function buildBundle(): Bundle {
       }
       rosterSlots.push({
         teamId: tid, week, playerId: p.id, slot,
-        isStarter, points: Math.round(pts * 10) / 10, projected,
+        isStarter, points: Math.round(pts * 10) / 10, projected, stats: null,
       });
     }
     return { total: Math.round(total * 10) / 10, proj: Math.round(projTotal * 10) / 10, yetToPlay };
@@ -372,6 +373,8 @@ function buildBundle(): Bundle {
     regularSeasonWeeks,
     faabBudget: 100,
     syncedAt: null,
+    scoring: null,
+    settings: null,
   };
   return {
     league,
@@ -385,6 +388,7 @@ function buildBundle(): Bundle {
     })),
     rosterSlots,
     transactions,
+    pendingTransactions: [],
     draftPicks,
     stats,
     recaps,

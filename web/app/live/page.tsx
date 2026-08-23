@@ -4,7 +4,8 @@ import Highlights from "@/components/Highlights";
 import AutoRefresh from "@/components/AutoRefresh";
 import { getBundle } from "@/lib/data";
 import { fmtKickoff, fmtPts } from "@/lib/format";
-import { teamById } from "@/lib/stats";
+import { playerById, teamById } from "@/lib/stats";
+import { statLine } from "@/lib/statline";
 import type { GameAnalysis } from "@/lib/types";
 
 export const metadata = { title: "Live & Gamecast" };
@@ -13,8 +14,15 @@ export default async function Live() {
   const bundle = await getBundle();
   const { league } = bundle;
   const team = teamById(bundle);
+  const player = playerById(bundle);
   const week = league.currentWeek;
   const matchups = bundle.matchups.filter((m) => m.week === week);
+
+  // Top fantasy performers among all rostered starters this week.
+  const topPerformers = bundle.rosterSlots
+    .filter((r) => r.week === week && r.isStarter && r.points > 0)
+    .sort((a, b) => b.points - a.points)
+    .slice(0, 10);
   const anyLive = matchups.some((m) => !m.isFinal && m.homeScore + m.awayScore > 0);
 
   const analysisByHome = new Map<string, GameAnalysis>(
@@ -100,6 +108,33 @@ export default async function Live() {
       )}
 
       <Highlights highlights={bundle.highlights} />
+
+      {topPerformers.length > 0 && (
+        <section>
+          <h3 className="mb-2 font-bold">🌟 Top performers · Week {week}</h3>
+          <div className="card table-scroll">
+            <ol className="divide-y divide-hairline">
+              {topPerformers.map((rs, i) => {
+                const p = player(rs.playerId);
+                const line = statLine(rs.stats);
+                return (
+                  <li key={`${rs.teamId}-${rs.playerId}`} className="flex items-center gap-3 px-3 py-2 text-sm">
+                    <span className="tnum w-5 text-center text-xs font-bold text-muted">{i + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-semibold">{p?.name ?? "—"}</span>
+                      <span className="ml-1.5 text-xs text-muted">
+                        {p?.position} · {p?.nflTeam} · {team(rs.teamId)?.abbrev}
+                      </span>
+                      {line && <div className="truncate text-[11px] text-ink2">{line}</div>}
+                    </div>
+                    <span className="tnum font-bold">{fmtPts(rs.points)}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        </section>
+      )}
 
       <section className="space-y-4">
         {matchups.map((m) => {
