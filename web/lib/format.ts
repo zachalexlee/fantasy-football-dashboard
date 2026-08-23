@@ -25,6 +25,24 @@ export function ordinal(n: number): string {
   return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
 }
 
+/** Kickoff date + time in ET (NFL's conventional timezone; deterministic so it
+ * doesn't cause server/client hydration drift). e.g. "Thu Aug 28, 8:00 PM ET". */
+export function fmtKickoff(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return (
+    new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "America/New_York",
+    }).format(d) + " ET"
+  );
+}
+
 export function timeAgo(iso: string): string {
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   if (mins < 1) return "just now";

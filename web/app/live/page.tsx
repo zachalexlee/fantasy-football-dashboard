@@ -3,7 +3,7 @@ import MatchupCard from "@/components/MatchupCard";
 import Highlights from "@/components/Highlights";
 import AutoRefresh from "@/components/AutoRefresh";
 import { getBundle } from "@/lib/data";
-import { fmtPts } from "@/lib/format";
+import { fmtKickoff, fmtPts } from "@/lib/format";
 import { teamById } from "@/lib/stats";
 import type { GameAnalysis } from "@/lib/types";
 
@@ -77,7 +77,9 @@ export default async function Live() {
                       ) : (
                         <span className="text-[11px] text-muted">{post ? "Final" : g.network ?? "—"}</span>
                       )}
-                      <span className="text-[11px] text-muted">{g.statusDetail ?? ""}</span>
+                      <span className="text-[11px] text-muted">
+                        {live || post ? g.statusDetail ?? "" : fmtKickoff(g.kickoff) ?? g.statusDetail ?? ""}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-semibold">{g.awayAbbrev}</span>

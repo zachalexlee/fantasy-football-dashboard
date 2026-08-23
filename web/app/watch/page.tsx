@@ -1,4 +1,5 @@
 import { getBundle } from "@/lib/data";
+import { fmtKickoff } from "@/lib/format";
 import {
   LEAGUE_WIDE,
   networkKey,
@@ -72,12 +73,17 @@ export default async function Watch() {
               const key = networkKey(g.network);
               return (
                 <div key={g.espnEventId} className="card overflow-hidden">
-                  <div className="flex items-center justify-between border-b border-hairline px-3 py-2.5">
-                    <span className="font-bold">
-                      {g.awayAbbrev} <span className="text-muted">@</span> {g.homeAbbrev}
-                    </span>
-                    <span className="text-xs text-muted">
-                      {g.network ? networkLabel(key) : g.statusDetail ?? "TBD"}
+                  <div className="flex items-start justify-between gap-2 border-b border-hairline px-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="font-bold">
+                        {g.awayAbbrev} <span className="text-muted">@</span> {g.homeAbbrev}
+                      </div>
+                      <div className="text-xs text-muted">
+                        {fmtKickoff(g.kickoff) ?? g.statusDetail ?? "Time TBD"}
+                      </div>
+                    </div>
+                    <span className="shrink-0 pt-0.5 text-right text-xs text-muted">
+                      {g.network ? networkLabel(key) : "TBD"}
                     </span>
                   </div>
                   <ul className="divide-y divide-hairline">
