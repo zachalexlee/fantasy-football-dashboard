@@ -42,13 +42,17 @@ export function networkLabel(key: string): string {
   );
 }
 
-// The user's YouTube TV plan carries every local broadcast network live, so it
-// shows up as an option on each linear-TV game.
+// YouTube TV has no public per-game URL (live games are opaque, login-gated
+// video ids that can't be constructed), so the best real destination is its
+// NFL Football hub — a page that lists every NFL game currently scheduled/live
+// on YouTube TV. It drops you one tap from the game instead of the bare home.
+const YT_TV_NFL_HUB = "https://tv.youtube.com/browse/nfl-football-UCbtmsgFTYKN5TuKUkg6ADUQ";
+
 const YOUTUBE_TV: WatchOption = {
   name: "YouTube TV",
-  url: "https://tv.youtube.com/",
+  url: YT_TV_NFL_HUB,
   free: false,
-  note: "Live in your YouTube TV plan — jump to the channel in the live guide",
+  note: "Opens YouTube TV's NFL games list — your game is right there to tap",
 };
 
 const BROADCAST_APP: Record<string, WatchOption[]> = {
@@ -99,8 +103,8 @@ const BROADCAST_APP: Record<string, WatchOption[]> = {
 
 // Always-available, league-wide legal ways to watch.
 export const LEAGUE_WIDE: WatchOption[] = [
-  { name: "YouTube TV", url: "https://tv.youtube.com/", free: false, note: "Your plan carries every local CBS/FOX/NBC/ABC + ESPN game live" },
-  { name: "NFL Sunday Ticket (YouTube TV)", url: "https://tv.youtube.com/learn/nflsundayticket/", free: false, note: "Every out-of-market Sunday afternoon game — your Sunday Ticket add-on" },
+  { name: "YouTube TV — NFL games list", url: YT_TV_NFL_HUB, free: false, note: "Every NFL game scheduled/live on YouTube TV, in one list — tap your game" },
+  { name: "NFL Sunday Ticket (YouTube TV)", url: YT_TV_NFL_HUB, free: false, note: "Out-of-market Sunday afternoon games live in the same NFL list, via your Sunday Ticket add-on" },
   { name: "NFL+", url: "https://www.nfl.com/plus/", free: false, note: "Live local & primetime games on phone/tablet; free trial available" },
   { name: "Antenna (free OTA)", url: "https://www.fcc.gov/media/engineering/dtvmaps", free: true, note: "CBS / FOX / NBC / ABC games are free over the air — check your local channels" },
   { name: "Tubi (free)", url: "https://tubitv.com/", free: true, note: "Streams many Sunday FOX games free, no subscription or login" },
