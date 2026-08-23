@@ -169,8 +169,16 @@ class EspnClient:
             sb = self._get(site_url, params, headers=headers)
         except requests.HTTPError as exc:
             log.warning("site.api scoreboard failed (%s); falling back to CDN", exc)
+            # The CDN core endpoint defaults to the current week and returns the
+            # SPA shell (not JSON) if given a date range — so query it bare.
             cdn_url = "https://cdn.espn.com/core/nfl/scoreboard"
-            data = self._get(cdn_url, [("xhr", "1")] + params, headers=headers)
+            resp = self.session.get(cdn_url, params=[("xhr", "1")], headers=headers, timeout=30)
+            resp.raise_for_status()
+            try:
+                data = resp.json()
+            except ValueError:
+                log.warning("CDN scoreboard non-JSON (%d): %s", resp.status_code, resp.text[:200])
+                data = {}
             sb = (data.get("content", {}) or {}).get("sbData", {}) if isinstance(data, dict) else {}
 
         season_type = sb.get("season", {}).get("type", 2)
