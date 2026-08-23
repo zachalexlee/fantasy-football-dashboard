@@ -170,6 +170,7 @@ async function supabaseBundle(): Promise<Bundle | null> {
       statusDetail: g.status_detail,
       network: g.network,
       seasonType: g.season_type ?? 2,
+      boxscore: g.boxscore ?? null,
     })),
     gameAnalysis: (gameAnalysis as any[]).map((g) => ({
       week: g.week,

@@ -92,6 +92,31 @@ export type Stat = {
   value: number;
 };
 
+export type BoxTeam = {
+  abbrev: string | null;
+  record: string | null;
+  linescores: { period: number | null; display: string | null }[];
+  statistics: { name: string | null; label: string | null; display: string | null }[];
+};
+
+export type GameLeader = {
+  category: string | null;
+  value: string | null;
+  athlete: string | null;
+  position: string | null;
+  team: string | null;
+  headshot: string | null;
+};
+
+export type Boxscore = {
+  home: BoxTeam;
+  away: BoxTeam;
+  leaders: GameLeader[];
+  venue: string | null;
+  location: string | null;
+  attendance: number | null;
+};
+
 export type NflGame = {
   espnEventId: string;
   kickoff: string | null;
@@ -104,6 +129,7 @@ export type NflGame = {
   statusDetail: string | null;
   network: string | null;
   seasonType: number; // 1 preseason / 2 regular / 3 postseason
+  boxscore: Boxscore | null;
 };
 
 export type Highlight = {
