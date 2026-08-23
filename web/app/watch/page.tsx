@@ -34,6 +34,8 @@ function OptionRow({ o }: { o: WatchOption }) {
   );
 }
 
+export const metadata = { title: "Watch Live" };
+
 export default async function Watch() {
   const bundle = await getBundle();
   // Only games you can still watch: live now or yet to kick off. Finished

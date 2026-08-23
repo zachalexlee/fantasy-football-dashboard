@@ -4,7 +4,7 @@ import AutoRefresh from "@/components/AutoRefresh";
 import TeamMark from "@/components/TeamMark";
 import { getBundle } from "@/lib/data";
 import { fmtPts, record } from "@/lib/format";
-import { playerById, teamById, winProbability } from "@/lib/stats";
+import { headToHead, playerById, teamById, winProbability } from "@/lib/stats";
 import type { RosterSlot } from "@/lib/types";
 
 // Starter slots, in display order. Bench/IR handled separately.
@@ -40,7 +40,13 @@ export default async function MatchupPage({
   if (!away) notFound(); // bye week — no head-to-head to show
 
   const live = !m.isFinal && m.homeScore + m.awayScore > 0;
+  const started = live || m.isFinal;
+  // Only bold an actual leader/winner — never on a 0-0 pre-game or a tie.
+  const homeWon = started && m.homeScore > m.awayScore;
+  const awayWon = started && m.awayScore > m.homeScore;
   const prob = live ? winProbability(m) : null;
+  const series = headToHead(bundle)(home.id, away.id);
+  const seriesGames = series.w + series.l + series.t;
 
   const startersFor = (tid: string) =>
     bundle.rosterSlots
@@ -106,7 +112,19 @@ export default async function MatchupPage({
     );
   };
 
-  const TeamHead = ({ t, score, ytp, won }: { t: typeof home; score: number; ytp: number | null; won: boolean }) => (
+  const TeamHead = ({
+    t,
+    score,
+    projected,
+    ytp,
+    won,
+  }: {
+    t: typeof home;
+    score: number;
+    projected: number | null;
+    ytp: number | null;
+    won: boolean;
+  }) => (
     <div className="flex items-center gap-2.5">
       <TeamMark team={t} size="md" />
       <div className="min-w-0">
@@ -118,8 +136,17 @@ export default async function MatchupPage({
           {live && ytp != null && ytp > 0 ? ` · ${ytp} to play` : ""}
         </div>
       </div>
-      <div className={`tnum ml-auto text-2xl font-extrabold ${won ? "" : "text-ink2"}`}>
-        {fmtPts(score)}
+      <div className="ml-auto text-right">
+        {started ? (
+          <div className={`tnum text-2xl font-extrabold ${won ? "" : "text-ink2"}`}>
+            {fmtPts(score)}
+          </div>
+        ) : (
+          <div className="tnum text-2xl font-extrabold text-ink2">
+            {projected != null ? fmtPts(projected, 0) : "—"}
+            <span className="ml-1 align-middle text-[11px] font-semibold text-muted">proj</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -159,9 +186,14 @@ export default async function MatchupPage({
           </div>
         )}
         <div className="grid grid-cols-2 gap-4">
-          <TeamHead t={home} score={m.homeScore} ytp={m.homeYetToPlay} won={m.homeScore >= m.awayScore} />
-          <TeamHead t={away} score={m.awayScore} ytp={m.awayYetToPlay} won={m.awayScore >= m.homeScore} />
+          <TeamHead t={home} score={m.homeScore} projected={m.homeProjected} ytp={m.homeYetToPlay} won={homeWon} />
+          <TeamHead t={away} score={m.awayScore} projected={m.awayProjected} ytp={m.awayYetToPlay} won={awayWon} />
         </div>
+        {seriesGames > 0 && (
+          <p className="mt-3 text-center text-xs text-muted">
+            Season series: <span className="font-semibold text-ink2">{home.abbrev} {series.w}–{series.l}{series.t ? `–${series.t}` : ""} {away.abbrev}</span>
+          </p>
+        )}
         {prob != null && (
           <div className="mt-3">
             <div className="flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full">

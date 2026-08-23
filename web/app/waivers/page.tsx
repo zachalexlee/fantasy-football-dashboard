@@ -5,11 +5,16 @@ import { getBundle } from "@/lib/data";
 import { fmtPts, fmtSignedPct } from "@/lib/format";
 import { playerById, statLookup, teamById } from "@/lib/stats";
 
+export const metadata = { title: "Waivers" };
+
 export default async function Waivers() {
   const bundle = await getBundle();
   const stat = statLookup(bundle);
   const team = teamById(bundle);
   const player = playerById(bundle);
+  // A null budget = this league uses waiver priority, not FAAB dollars. Don't
+  // fabricate a $100 budget and fake $ meters for it.
+  const hasFaab = bundle.league.faabBudget != null;
   const budget = bundle.league.faabBudget ?? 100;
 
   const faabRows = bundle.teams
@@ -24,7 +29,9 @@ export default async function Waivers() {
         perDollar: spent > 0 ? points / spent : null,
       };
     })
-    .sort((a, b) => (b.perDollar ?? -1) - (a.perDollar ?? -1));
+    .sort((a, b) =>
+      hasFaab ? (b.perDollar ?? -1) - (a.perDollar ?? -1) : b.points - a.points
+    );
 
   const rostered = new Set(
     bundle.rosterSlots.filter((r) => r.week === bundle.league.currentWeek).map((r) => r.playerId)
@@ -47,18 +54,20 @@ export default async function Waivers() {
           FAAB budgets, who spends well, and who the league is sleeping on.
         </p>
         <div className="mb-3 flex items-baseline justify-between">
-          <h3 className="font-bold">FAAB leaderboard</h3>
-          <span className="text-xs text-muted">${budget} season budget</span>
+          <h3 className="font-bold">{hasFaab ? "FAAB leaderboard" : "Pickup production"}</h3>
+          <span className="text-xs text-muted">
+            {hasFaab ? `$${budget} season budget` : "Waiver-priority league"}
+          </span>
         </div>
         <div className="card table-scroll">
           <table className="w-full min-w-140 text-sm">
             <thead>
               <tr className="border-b border-hairline text-left text-xs text-muted">
                 <th className="px-3 py-2.5">Team</th>
-                <th className="px-2 py-2.5">Remaining</th>
-                <th className="px-2 py-2.5 text-right">Spent</th>
+                {hasFaab && <th className="px-2 py-2.5">Remaining</th>}
+                {hasFaab && <th className="px-2 py-2.5 text-right">Spent</th>}
                 <th className="px-2 py-2.5 text-right">Pts from pickups</th>
-                <th className="px-3 py-2.5 text-right">Pts / $</th>
+                {hasFaab && <th className="px-3 py-2.5 text-right">Pts / $</th>}
               </tr>
             </thead>
             <tbody>
@@ -70,24 +79,29 @@ export default async function Waivers() {
                       <span className="max-w-44 truncate font-semibold">{t.name}</span>
                     </Link>
                   </td>
-                  <td className="px-2 py-2">
-                    <div className="flex items-center gap-2">
-                      <Meter fraction={remaining / budget} label={`${t.name} FAAB remaining`} />
-                      <span className="tnum w-9 text-right text-xs">${remaining}</span>
-                    </div>
-                  </td>
-                  <td className="px-2 py-2 text-right tnum">${spent}</td>
+                  {hasFaab && (
+                    <td className="px-2 py-2">
+                      <div className="flex items-center gap-2">
+                        <Meter fraction={remaining / budget} label={`${t.name} FAAB remaining`} />
+                        <span className="tnum w-9 text-right text-xs">${remaining}</span>
+                      </div>
+                    </td>
+                  )}
+                  {hasFaab && <td className="px-2 py-2 text-right tnum">${spent}</td>}
                   <td className="px-2 py-2 text-right tnum">{fmtPts(points)}</td>
-                  <td className="px-3 py-2 text-right tnum font-semibold">
-                    {perDollar == null ? "—" : fmtPts(perDollar, 2)}
-                  </td>
+                  {hasFaab && (
+                    <td className="px-3 py-2 text-right tnum font-semibold">
+                      {perDollar == null ? "—" : fmtPts(perDollar, 2)}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p className="mt-2 text-xs text-muted">
-          Pts from pickups counts starter points from waiver adds, from the pickup week on — did that $37 bid actually produce?
+          Pts from pickups counts starter points from waiver adds, from the pickup week on
+          {hasFaab ? " — did that $37 bid actually produce?" : "."}
         </p>
       </section>
 

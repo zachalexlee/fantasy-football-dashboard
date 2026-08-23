@@ -2,6 +2,7 @@ import ChatRoom from "@/components/ChatRoom";
 import { getBundle } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Chat" };
 
 export default async function Chat() {
   const bundle = await getBundle();

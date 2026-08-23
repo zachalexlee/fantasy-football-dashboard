@@ -79,7 +79,10 @@ export default async function Home({
               {standings(bundle).map((t, i) => {
                 const luck = stat(t.id, "luck_delta");
                 const streak = stat(t.id, "streak") ?? 0;
+                const odds = stat(t.id, "playoff_odds");
                 const inPlayoffs = i < league.playoffTeamCount;
+                const clinched = odds != null && odds >= 0.9995;
+                const eliminated = odds != null && odds <= 0.0005;
                 return (
                   <tr key={t.id} className="border-b border-hairline last:border-0">
                     <td className={`px-3 py-2 tnum font-semibold ${inPlayoffs ? "text-accent" : "text-muted"}`}>
@@ -89,6 +92,12 @@ export default async function Home({
                       <Link href={`/teams/${t.id}`} className="flex items-center gap-2 hover:underline">
                         <TeamMark team={t} size="sm" />
                         <span className="max-w-44 truncate font-semibold">{t.name}</span>
+                        {clinched && (
+                          <span title="Clinched a playoff spot" className="rounded bg-good/15 px-1 py-0.5 text-[9px] font-bold uppercase text-goodtext">x</span>
+                        )}
+                        {eliminated && (
+                          <span title="Eliminated from playoff contention" className="rounded bg-surface2 px-1 py-0.5 text-[9px] font-bold uppercase text-muted">e</span>
+                        )}
                         <span className="hidden text-xs text-muted md:inline">{t.ownerName}</span>
                       </Link>
                     </td>
@@ -99,7 +108,9 @@ export default async function Home({
                     <td className="px-2 py-2 text-right tnum">{fmtPts(t.pointsFor)}</td>
                     <td className="px-2 py-2 text-right tnum text-ink2">{fmtPts(t.pointsAgainst)}</td>
                     <td className="px-2 py-2 tnum text-ink2">
-                      {stat(t.id, "all_play_wins") ?? "—"}-{stat(t.id, "all_play_losses") ?? "—"}
+                      {stat(t.id, "all_play_wins") == null
+                        ? "—"
+                        : `${stat(t.id, "all_play_wins")}-${stat(t.id, "all_play_losses")}`}
                     </td>
                     <td className="px-2 py-2 text-right tnum">
                       {luck == null ? "—" : (

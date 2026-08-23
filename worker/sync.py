@@ -230,6 +230,10 @@ class Sync:
             all_players = []
             projections: dict[int, float] = {}
             yet_to_play: dict[int, int] = {}
+            # Sum of starters' live points per team — the matchup side's
+            # `totalPoints` lags (often 0) during a game, so we reconstruct the
+            # in-progress total here and prefer it below.
+            live_points: dict[int, float] = {}
 
             for e in entries:
                 for side in ("home", "away"):
@@ -238,7 +242,7 @@ class Sync:
                         continue
                     roster = (team_entry.get("rosterForCurrentScoringPeriod")
                               or team_entry.get("rosterForMatchupPeriod") or {})
-                    proj_sum, ytp = 0.0, 0
+                    proj_sum, ytp, live_sum = 0.0, 0, 0.0
                     for slot_entry in roster.get("entries", []):
                         ppe = slot_entry.get("playerPoolEntry", {})
                         player = ppe.get("player", {})
@@ -258,6 +262,7 @@ class Sync:
                                 played = True
                         if is_starter:
                             proj_sum += projected or 0
+                            live_sum += points
                             if not played:
                                 ytp += 1
                         roster_rows.append({
@@ -271,6 +276,7 @@ class Sync:
                         })
                     projections[team_entry.get("teamId")] = round(proj_sum, 2)
                     yet_to_play[team_entry.get("teamId")] = ytp
+                    live_points[team_entry.get("teamId")] = round(live_sum, 2)
 
             self._upsert_players(all_players)
             self.db.upsert("roster_slots", [{
@@ -299,13 +305,24 @@ class Sync:
                     winner_id = home_id
                 elif winner == "AWAY":
                     winner_id = away_id
+
+                def side_score(side_obj: dict) -> float:
+                    # Prefer the live total (or reconstructed starter sum) so an
+                    # in-progress game doesn't read 0-0 off a lagging totalPoints.
+                    tid = side_obj.get("teamId")
+                    return round(
+                        side_obj.get("totalPointsLive")
+                        or side_obj.get("totalPoints")
+                        or live_points.get(tid, 0.0)
+                        or 0.0, 2)
+
                 matchup_rows.append({
                     "league_id": self.league_row["id"],
                     "week": week,
                     "home_team_id": home_id,
                     "away_team_id": away_id,
-                    "home_score": round(home.get("totalPoints", 0), 2),
-                    "away_score": round(away.get("totalPoints", 0), 2) if away else 0,
+                    "home_score": side_score(home),
+                    "away_score": side_score(away) if away else 0,
                     "home_projected": projections.get(home.get("teamId")),
                     "away_projected": projections.get(away.get("teamId")) if away else None,
                     "home_yet_to_play": yet_to_play.get(home.get("teamId")),
@@ -432,12 +449,15 @@ class Sync:
         players = self.db.select("players", "select=id,name,position")
         players_by_id = {p["id"]: p for p in players}
 
+        through = self._last_final_week(matchups)
+        # Movement arrows are week-over-week: read the prior completed week's
+        # power-rank snapshot (stored at week=through-1), NOT the week=0 "current"
+        # rank, which would churn every sync when we run several times a day.
         prev_ranks = {
             r["team_id"]: int(r["value"]) for r in self.db.select(
                 "computed_stats",
-                f"select=team_id,value&league_id=eq.{lid}&stat_key=eq.power_rank&week=eq.0")
-        }
-        through = self._last_final_week(matchups)
+                f"select=team_id,value&league_id=eq.{lid}&stat_key=eq.power_rank&week=eq.{max(through - 1, 0)}")
+        } if through >= 1 else {}
         slot_counts = self.slot_counts or league.get("settings_json", {}).get("slotCounts", {}) or {
             "QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "D/ST": 1, "K": 1}
 
@@ -451,6 +471,14 @@ class Sync:
             regular_season_weeks=league["regular_season_weeks"],
             playoff_team_count=league["playoff_team_count"])
         rows += compute.faab_efficiency(teams, transactions, roster_slots)
+
+        # Snapshot this week's power rank at week=through so next week's sync can
+        # compute week-over-week movement (see prev_ranks above). Overwrites
+        # harmlessly on repeated syncs within the same week.
+        if through >= 1:
+            for r in list(rows):
+                if r.get("stat_key") == "power_rank" and r.get("week") == 0:
+                    rows.append({**r, "week": through})
 
         for r in rows:
             r["league_id"] = lid
@@ -584,18 +612,24 @@ class Sync:
     # ------------------------------------------------------------------ run
 
     def run(self, full_backfill: bool = False) -> None:
+        # Core: define the league, teams, and this season's matchups/rosters.
+        # A failure here has nothing to compute from, so it aborts the run.
         self.fetch_league()
-        self.backfill_history()
-        self.fetch_players()
         self.fetch_matchups_and_rosters(full_backfill=full_backfill)
-        self.fetch_transactions()
-        self.fetch_draft()
-        self.compute_all()
-        for step in (self.fetch_nfl, self.write_game_analysis, self.fetch_highlights):
-            try:  # gamecast extras never block the core sync
+
+        # Everything else is best-effort and independently isolated: a transient
+        # failure in transactions or the draft must not starve compute_all/recap
+        # (which run off last-good data), and the gamecast extras never block
+        # the core sync either.
+        for step in (self.backfill_history, self.fetch_players,
+                     self.fetch_transactions, self.fetch_draft,
+                     self.compute_all, self.fetch_nfl,
+                     self.write_game_analysis, self.fetch_highlights):
+            try:
                 step()
             except Exception as exc:
                 log.warning("%s failed: %s", step.__name__, exc)
+
         self.db.update("leagues", f"id=eq.{self.league_row['id']}",
                        {"synced_at": dt.datetime.now(dt.timezone.utc).isoformat()})
         log.info("Sync complete (week %d)", self.current_week)

@@ -5,10 +5,31 @@ import { getBundle } from "@/lib/data";
 import { fmtPct, record } from "@/lib/format";
 import { statLookup } from "@/lib/stats";
 
+export const metadata = { title: "Playoff Odds" };
+
+function ClinchBadge({ odds }: { odds: number }) {
+  if (odds >= 0.9995)
+    return (
+      <span className="rounded bg-good/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-goodtext" title="Clinched a playoff spot in every simulation">
+        Clinched
+      </span>
+    );
+  if (odds <= 0.0005)
+    return (
+      <span className="rounded bg-surface2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted" title="Missed the playoffs in every simulation">
+        Eliminated
+      </span>
+    );
+  return null;
+}
+
 export default async function Odds() {
   const bundle = await getBundle();
   const { league } = bundle;
   const stat = statLookup(bundle);
+  // Only 6-team brackets award first-round byes, so the Bye column is dead
+  // weight (all 0%) otherwise.
+  const showBye = league.playoffTeamCount === 6;
 
   const rows = bundle.teams
     .map((t) => ({
@@ -36,7 +57,7 @@ export default async function Odds() {
               <th className="px-2 py-2.5">Team</th>
               <th className="px-2 py-2.5">Record</th>
               <th className="px-2 py-2.5">Playoffs</th>
-              <th className="px-2 py-2.5 text-right">Bye</th>
+              {showBye && <th className="px-2 py-2.5 text-right">Bye</th>}
               <th className="px-3 py-2.5 text-right">Avg. seed</th>
             </tr>
           </thead>
@@ -52,6 +73,7 @@ export default async function Odds() {
                   <Link href={`/teams/${t.id}`} className="flex items-center gap-2 hover:underline">
                     <TeamMark team={t} size="sm" />
                     <span className="max-w-44 truncate font-semibold">{t.name}</span>
+                    <ClinchBadge odds={odds} />
                   </Link>
                 </td>
                 <td className="px-2 py-2.5 tnum">{record(t.wins, t.losses, t.ties)}</td>
@@ -61,7 +83,7 @@ export default async function Odds() {
                     <span className="tnum w-11 text-right font-bold">{fmtPct(odds)}</span>
                   </div>
                 </td>
-                <td className="px-2 py-2.5 text-right tnum text-ink2">{fmtPct(bye)}</td>
+                {showBye && <td className="px-2 py-2.5 text-right tnum text-ink2">{fmtPct(bye)}</td>}
                 <td className="px-3 py-2.5 text-right tnum text-ink2">{seed.toFixed(1)}</td>
               </tr>
             ))}

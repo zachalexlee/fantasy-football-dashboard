@@ -7,6 +7,8 @@ import { fmtKickoff, fmtPts } from "@/lib/format";
 import { teamById } from "@/lib/stats";
 import type { GameAnalysis } from "@/lib/types";
 
+export const metadata = { title: "Live & Gamecast" };
+
 export default async function Live() {
   const bundle = await getBundle();
   const { league } = bundle;

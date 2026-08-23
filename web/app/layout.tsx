@@ -6,10 +6,17 @@ import { getBundle } from "@/lib/data";
 import { timeAgo } from "@/lib/format";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "League Dashboard",
-  description: "Standings, matchups, waivers, power rankings, and weekly recaps",
-};
+// Title/description from the actual league (getBundle is request-cached, so this
+// shares the layout's read). A %s child template lets pages set their own tab
+// title as "Power Rankings · {league}".
+export async function generateMetadata(): Promise<Metadata> {
+  const { league } = await getBundle();
+  const name = league?.name || "League Dashboard";
+  return {
+    title: { default: name, template: `%s · ${name}` },
+    description: "Standings, matchups, scores, waivers, power rankings, and weekly recaps",
+  };
+}
 
 // Render every page per-request so a build can never bake stale (or demo)
 // data into static pages. Supabase reads stay cached for 60s in lib/data.ts,

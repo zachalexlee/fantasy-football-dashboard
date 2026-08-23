@@ -26,16 +26,15 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   const { league } = bundle;
 
   const rosterWeek = Math.min(league.currentWeek, league.finalWeek);
+  const slotOrder = ["QB", "RB", "WR", "TE", "FLEX", "RB/WR", "WR/TE", "OP", "D/ST", "K", "BE", "IR"];
   const roster = bundle.rosterSlots
     .filter((r) => r.teamId === t.id && r.week === rosterWeek)
-    .sort((a, b) => Number(b.isStarter) - Number(a.isStarter) || b.points - a.points);
-  const slotOrder = ["QB", "RB", "WR", "TE", "FLEX", "RB/WR", "WR/TE", "OP", "D/ST", "K", "BE", "IR"];
-  roster.sort(
-    (a, b) =>
-      Number(b.isStarter) - Number(a.isStarter) ||
-      slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot) ||
-      b.points - a.points
-  );
+    .sort(
+      (a, b) =>
+        Number(b.isStarter) - Number(a.isStarter) ||
+        slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot) ||
+        b.points - a.points
+    );
 
   const schedule = bundle.matchups
     .filter((m) => m.homeTeamId === t.id || m.awayTeamId === t.id)

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getBundle } from "@/lib/data";
 
+export const metadata = { title: "Recaps" };
+
 export default async function Recaps() {
   const bundle = await getBundle();
   const recaps = [...bundle.recaps].sort((a, b) => b.week - a.week);

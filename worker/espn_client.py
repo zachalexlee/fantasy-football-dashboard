@@ -85,6 +85,7 @@ class EspnClient:
         """GET with retry + exponential backoff. 401 twice in a row -> CookieExpired.
         5xx / schema weirdness raises after retries; callers keep last-good data."""
         saw_401 = False
+        tried_browser = False
         delay = 2.0
         for attempt in range(self.max_retries + 1):
             try:
@@ -95,6 +96,14 @@ class EspnClient:
                     raise
                 time.sleep(delay)
                 delay *= 2
+                continue
+
+            # ESPN's WAF sometimes 403s a plain server UA; one retry with
+            # browser-like headers usually clears it (same trick the scoreboard
+            # CDN fallback uses).
+            if resp.status_code == 403 and not tried_browser:
+                tried_browser = True
+                headers = {**(headers or {}), **self._BROWSER_HEADERS}
                 continue
 
             if resp.status_code == 401:

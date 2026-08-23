@@ -28,6 +28,18 @@ async function rest(path: string): Promise<Record<string, unknown>[]> {
   }
 }
 
+// Secondary tables: a transient failure on one should degrade just that
+// section (empty), never throw away the whole real bundle for fabricated demo
+// data. Only leagues/teams/matchups are load-bearing enough to be strict.
+async function safeRest(path: string): Promise<Record<string, unknown>[]> {
+  try {
+    return await rest(path);
+  } catch (err) {
+    console.error(`Supabase read failed (degrading section): ${path}`, err);
+    return [];
+  }
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const mapLeague = (lg: any): League => ({
   id: lg.id,
@@ -84,15 +96,15 @@ async function supabaseBundle(): Promise<Bundle | null> {
     await Promise.all([
       rest(`teams?select=*`),
       rest(`matchups?select=*&order=week`),
-      rest(`players?select=*`),
-      rest(`roster_slots?select=*`),
-      rest(`transactions?select=*&league_id=eq.${lid}&order=executed_at.desc`),
-      rest(`draft_picks?select=*&league_id=eq.${lid}&order=pick`),
-      rest(`computed_stats?select=*&league_id=eq.${lid}`),
-      rest(`recaps?select=*&league_id=eq.${lid}&order=week`),
-      rest(`nfl_games?select=*&order=kickoff`),
-      rest(`game_analysis?select=*&league_id=eq.${lid}&week=eq.${(leagues[0] as any).current_week}`),
-      rest(`game_highlights?select=provider_id,title,url,embed_url,thumbnail_url,source,home_team,away_team,kind,espn_event_id&order=synced_at.desc`),
+      safeRest(`players?select=*`),
+      safeRest(`roster_slots?select=*`),
+      safeRest(`transactions?select=*&league_id=eq.${lid}&order=executed_at.desc`),
+      safeRest(`draft_picks?select=*&league_id=eq.${lid}&order=pick`),
+      safeRest(`computed_stats?select=*&league_id=eq.${lid}`),
+      safeRest(`recaps?select=*&league_id=eq.${lid}&order=week`),
+      safeRest(`nfl_games?select=*&order=kickoff`),
+      safeRest(`game_analysis?select=*&league_id=eq.${lid}&week=eq.${(leagues[0] as any).current_week}`),
+      safeRest(`game_highlights?select=provider_id,title,url,embed_url,thumbnail_url,source,home_team,away_team,kind,espn_event_id&order=synced_at.desc`),
     ]);
 
   const seasons: SeasonSlice[] = (leagues as any[]).map((lg) => ({

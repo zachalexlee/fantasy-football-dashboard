@@ -57,6 +57,8 @@ function ScoreSide({
   );
 }
 
+export const metadata = { title: "Scores" };
+
 export default async function Scores() {
   const bundle = await getBundle();
   const games = bundle.nflGames;

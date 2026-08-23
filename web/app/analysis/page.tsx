@@ -2,14 +2,43 @@ import LuckScatter, { type LuckPoint } from "@/components/LuckScatter";
 import TeamMark from "@/components/TeamMark";
 import { getBundle } from "@/lib/data";
 import { fmtPct, fmtPts } from "@/lib/format";
-import { lastCompletedWeek, recordVsSchedule, standings, statLookup } from "@/lib/stats";
+import {
+  lastCompletedWeek,
+  recordBook,
+  recordVsSchedule,
+  standings,
+  statLookup,
+  teamById,
+} from "@/lib/stats";
+
+export const metadata = { title: "Analysis" };
 
 export default async function Analysis() {
   const bundle = await getBundle();
   const stat = statLookup(bundle);
+  const team = teamById(bundle);
   const through = lastCompletedWeek(bundle);
+
+  // Before any game is final every table here is either all-zero or a divide by
+  // nothing — show a single honest placeholder instead of a meaningless grid.
+  if (through === 0) {
+    return (
+      <div className="py-16 text-center">
+        <div className="mb-3 text-4xl" aria-hidden>
+          📊
+        </div>
+        <h2 className="mb-1 text-lg font-extrabold">Analysis unlocks after week 1</h2>
+        <p className="mx-auto max-w-md text-sm text-ink2">
+          Luck charts, strength-of-schedule, lineup efficiency, and the record book all need at
+          least one completed week. They&apos;ll light up the moment real games are in the books.
+        </p>
+      </div>
+    );
+  }
+
   const grid = recordVsSchedule(bundle, through);
   const order = standings(bundle);
+  const book = recordBook(bundle);
 
   const luckPoints: LuckPoint[] = [];
   for (const m of bundle.matchups) {
@@ -124,6 +153,81 @@ export default async function Analysis() {
               </li>
             ))}
           </ol>
+        </div>
+      </section>
+
+      <section>
+        <h3 className="mb-1 font-bold">📖 Season record book</h3>
+        <p className="mb-3 text-xs text-muted">The high-water marks and heartbreakers, this season.</p>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="card p-3">
+            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-goodtext">Top scores</div>
+            <ol className="space-y-1.5">
+              {book.topScores.map((p, i) => (
+                <li key={i} className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="min-w-0 truncate">
+                    <span className="font-semibold">{team(p.teamId)?.abbrev ?? "?"}</span>
+                    <span className="text-muted"> wk {p.week}</span>
+                  </span>
+                  <span className="tnum font-bold">{fmtPts(p.points)}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+          <div className="card p-3">
+            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-bad">Low scores</div>
+            <ol className="space-y-1.5">
+              {book.lowScores.map((p, i) => (
+                <li key={i} className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="min-w-0 truncate">
+                    <span className="font-semibold">{team(p.teamId)?.abbrev ?? "?"}</span>
+                    <span className="text-muted"> wk {p.week}</span>
+                  </span>
+                  <span className="tnum font-bold">{fmtPts(p.points)}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+          <div className="card p-3">
+            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-ink2">Biggest blowouts</div>
+            <ol className="space-y-1.5">
+              {book.blowouts.map((m) => {
+                const win = m.homeScore >= m.awayScore ? m.homeTeamId : m.awayTeamId!;
+                const lose = m.homeScore >= m.awayScore ? m.awayTeamId! : m.homeTeamId;
+                return (
+                  <li key={m.id} className="flex items-baseline justify-between gap-2 text-sm">
+                    <span className="min-w-0 truncate">
+                      <span className="font-semibold">{team(win)?.abbrev ?? "?"}</span>
+                      <span className="text-muted"> over {team(lose)?.abbrev ?? "?"}</span>
+                    </span>
+                    <span className="tnum font-bold">
+                      +{fmtPts(Math.abs(m.homeScore - m.awayScore))}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+          <div className="card p-3">
+            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-ink2">Nail-biters</div>
+            <ol className="space-y-1.5">
+              {book.nailbiters.map((m) => {
+                const win = m.homeScore >= m.awayScore ? m.homeTeamId : m.awayTeamId!;
+                const lose = m.homeScore >= m.awayScore ? m.awayTeamId! : m.homeTeamId;
+                return (
+                  <li key={m.id} className="flex items-baseline justify-between gap-2 text-sm">
+                    <span className="min-w-0 truncate">
+                      <span className="font-semibold">{team(win)?.abbrev ?? "?"}</span>
+                      <span className="text-muted"> over {team(lose)?.abbrev ?? "?"}</span>
+                    </span>
+                    <span className="tnum font-bold">
+                      {fmtPts(Math.abs(m.homeScore - m.awayScore))}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
         </div>
       </section>
     </div>

@@ -16,6 +16,12 @@ export default function LuckScatter({ points }: { points: LuckPoint[] }) {
   const [hover, setHover] = useState<LuckPoint | null>(null);
   const size = 340;
   const pad = 40;
+  if (!points.length)
+    return (
+      <p className="text-sm text-muted">
+        The luck chart fills in once games are played — check back after week 1.
+      </p>
+    );
   const all = points.flatMap((p) => [p.pointsFor, p.pointsAgainst]);
   const lo = Math.floor(Math.min(...all) / 10) * 10;
   const hi = Math.ceil(Math.max(...all) / 10) * 10;
@@ -46,9 +52,18 @@ export default function LuckScatter({ points }: { points: LuckPoint[] }) {
             fill={p.won ? "var(--good)" : "var(--surface)"}
             stroke={p.won ? "var(--surface)" : "var(--bad)"}
             strokeWidth="2"
+            tabIndex={0}
+            role="img"
             onMouseEnter={() => setHover(p)}
             onMouseLeave={() => setHover(null)}
-          />
+            onFocus={() => setHover(p)}
+            onBlur={() => setHover(null)}
+          >
+            <title>
+              {p.team} · Wk {p.week} · {p.pointsFor.toFixed(1)} vs {p.pointsAgainst.toFixed(1)} ·{" "}
+              {p.won ? "won" : "lost"}
+            </title>
+          </circle>
         ))}
         <text x={size / 2} y={size - 6} textAnchor="middle" fontSize="10" fill="var(--ink-2)">
           Points scored →

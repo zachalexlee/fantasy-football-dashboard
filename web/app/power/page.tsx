@@ -17,6 +17,8 @@ function Movement({ now, prev }: { now: number; prev: number | undefined }) {
   );
 }
 
+export const metadata = { title: "Power Rankings" };
+
 export default async function Power() {
   const bundle = await getBundle();
   const stat = statLookup(bundle);
@@ -57,20 +59,20 @@ export default async function Power() {
                 <div className="text-xs text-muted">
                   {record(t.wins, t.losses, t.ties)} · {t.ownerName}
                 </div>
-                <div className="mt-1.5 hidden gap-4 text-xs text-ink2 sm:flex">
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink2">
                   <span>
                     <span className="text-muted">L3 avg</span>{" "}
                     <span className="tnum font-semibold">{fmtPts(recentAvg)}</span>
-                  </span>
-                  <span>
-                    <span className="text-muted">Season PF</span>{" "}
-                    <span className="tnum font-semibold">{fmtPts(t.pointsFor, 0)}</span>
                   </span>
                   <span>
                     <span className="text-muted">All-play</span>{" "}
                     <span className="tnum font-semibold">
                       {apW}-{apL}
                     </span>
+                  </span>
+                  <span className="hidden sm:inline">
+                    <span className="text-muted">Season PF</span>{" "}
+                    <span className="tnum font-semibold">{fmtPts(t.pointsFor, 0)}</span>
                   </span>
                 </div>
               </div>

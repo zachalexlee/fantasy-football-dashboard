@@ -1,8 +1,14 @@
 export const fmtPts = (n: number | null | undefined, dp = 1) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 
-export const fmtPct = (n: number | null | undefined) =>
-  n == null ? "—" : `${Math.round(n * 100)}%`;
+export const fmtPct = (n: number | null | undefined) => {
+  if (n == null) return "—";
+  const pct = n * 100;
+  // Don't let rounding imply clinched/eliminated when it isn't.
+  if (pct > 0 && pct < 1) return "<1%";
+  if (pct < 100 && pct > 99) return ">99%";
+  return `${Math.round(pct)}%`;
+};
 
 export const fmtSignedPct = (n: number | null | undefined) =>
   n == null ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
