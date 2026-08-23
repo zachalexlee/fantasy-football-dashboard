@@ -471,12 +471,18 @@ class Sync:
             }], on_conflict="league_id,week")
 
     def fetch_nfl(self) -> None:
-        """Real NFL slate for the current week: scores, status, networks."""
-        games = self.espn.fetch_nfl_scoreboard(self.current_week)
+        """Current real NFL slate: scores, status, networks. ESPN's current
+        scoreboard = preseason now, regular season once it starts. Old rows
+        are dropped so the tab only ever shows what's on this window."""
+        games = self.espn.fetch_nfl_scoreboard()  # current slate
         now = dt.datetime.now(dt.timezone.utc).isoformat()
-        rows = [{**g, "season": self.espn.season, "week": self.current_week,
-                 "synced_at": now} for g in games]
+        rows = [{**g, "season": self.espn.season, "synced_at": now} for g in games]
+        if not rows:
+            return
+        keep = ",".join(f'"{g["espn_event_id"]}"' for g in rows)
         self.db.upsert("nfl_games", rows, on_conflict="espn_event_id")
+        # Drop any prior slate (last week's games, or a stale season type).
+        self.db.delete("nfl_games", f"espn_event_id=not.in.({keep})")
 
     def write_game_analysis(self) -> None:
         """Gamecast writeups for every current-week matchup (throttled)."""

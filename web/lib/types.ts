@@ -103,6 +103,7 @@ export type NflGame = {
   status: string; // pre / in / post
   statusDetail: string | null;
   network: string | null;
+  seasonType: number; // 1 preseason / 2 regular / 3 postseason
 };
 
 export type GameAnalysis = {

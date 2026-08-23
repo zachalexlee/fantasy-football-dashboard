@@ -35,16 +35,16 @@ function OptionRow({ o }: { o: WatchOption }) {
 
 export default async function Watch() {
   const bundle = await getBundle();
-  const { league } = bundle;
   const games = bundle.nflGames;
+  const preseason = games.length > 0 && games.every((g) => g.seasonType === 1);
 
   return (
     <div className="space-y-8">
       <div>
         <h2 className="mb-1 text-lg font-extrabold tracking-tight">Watch Live</h2>
         <p className="text-sm text-ink2">
-          Every legit way to catch each Week {league.currentWeek} game — tap the broadcaster or a
-          free option and go straight to the stream.
+          Every legit way to catch each {preseason ? "preseason" : "current"} game — tap the
+          broadcaster or a free option and go straight to the stream.
         </p>
       </div>
 
@@ -63,7 +63,9 @@ export default async function Watch() {
       </section>
 
       <section>
-        <h3 className="mb-3 font-bold">This week&apos;s games</h3>
+        <h3 className="mb-3 font-bold">
+          {preseason ? "Preseason games" : "This week's games"}
+        </h3>
         {games.length ? (
           <div className="grid gap-4 md:grid-cols-2">
             {games.map((g) => {

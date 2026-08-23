@@ -76,3 +76,6 @@ class Db:
     def update(self, table: str, filters: str, patch: dict) -> None:
         self._request("PATCH", f"{table}?{filters}", json=patch,
                       headers={"Prefer": "return=minimal"})
+
+    def delete(self, table: str, filters: str) -> None:
+        self._request("DELETE", f"{table}?{filters}", headers={"Prefer": "return=minimal"})

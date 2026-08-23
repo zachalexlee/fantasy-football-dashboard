@@ -90,7 +90,7 @@ async function supabaseBundle(): Promise<Bundle | null> {
       rest(`draft_picks?select=*&league_id=eq.${lid}&order=pick`),
       rest(`computed_stats?select=*&league_id=eq.${lid}`),
       rest(`recaps?select=*&league_id=eq.${lid}&order=week`),
-      rest(`nfl_games?select=*&season=eq.${(leagues[0] as any).season}&week=eq.${(leagues[0] as any).current_week}&order=kickoff`),
+      rest(`nfl_games?select=*&order=kickoff`),
       rest(`game_analysis?select=*&league_id=eq.${lid}&week=eq.${(leagues[0] as any).current_week}`),
     ]);
 
@@ -168,6 +168,7 @@ async function supabaseBundle(): Promise<Bundle | null> {
       status: g.status,
       statusDetail: g.status_detail,
       network: g.network,
+      seasonType: g.season_type ?? 2,
     })),
     gameAnalysis: (gameAnalysis as any[]).map((g) => ({
       week: g.week,

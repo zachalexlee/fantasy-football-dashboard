@@ -53,7 +53,14 @@ export default async function Live() {
       {/* NFL slate strip: real scores + status behind each fantasy game. */}
       {bundle.nflGames.length > 0 && (
         <section>
-          <h3 className="mb-2 font-bold">NFL slate</h3>
+          <h3 className="mb-2 font-bold">
+            NFL slate
+            {bundle.nflGames.every((g) => g.seasonType === 1) && (
+              <span className="ml-2 rounded-full bg-surface2 px-2 py-0.5 text-[11px] font-semibold text-ink2">
+                Preseason
+              </span>
+            )}
+          </h3>
           <div className="table-scroll -mx-1">
             <div className="flex gap-2 px-1 pb-1">
               {bundle.nflGames.map((g) => {

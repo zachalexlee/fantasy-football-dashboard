@@ -142,12 +142,18 @@ class EspnClient:
             data = data[0]
         return data.get("players", [])
 
-    def fetch_nfl_scoreboard(self, week: int) -> list[dict]:
-        """Real NFL games for a week (scores, status, broadcast network) from
-        ESPN's public site scoreboard API. Normalized to plain dicts."""
+    def fetch_nfl_scoreboard(self, week: int | None = None) -> list[dict]:
+        """Real NFL games for the current slate (scores, status, broadcast
+        network) from ESPN's public site scoreboard API. With no week, ESPN
+        returns whatever is current — preseason in August, regular season once
+        it starts — so the dashboard always shows what's actually on."""
         url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-        data = self._get(url, [("seasontype", "2"), ("week", str(week)),
-                               ("dates", str(self.season))])
+        params: list[tuple[str, str]] = []
+        if week is not None:
+            params += [("seasontype", "2"), ("week", str(week)), ("dates", str(self.season))]
+        data = self._get(url, params)
+        season_type = data.get("season", {}).get("type", 2)
+        real_week = data.get("week", {}).get("number", week or 1)
         games = []
         for event in data.get("events", []):
             comp = (event.get("competitions") or [{}])[0]
@@ -167,6 +173,8 @@ class EspnClient:
                 "status": status.get("state", "pre"),
                 "status_detail": status.get("shortDetail"),
                 "network": network,
+                "season_type": season_type,   # 1 pre / 2 regular / 3 post
+                "week": real_week,
             })
         return games
 
