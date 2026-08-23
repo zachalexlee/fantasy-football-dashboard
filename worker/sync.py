@@ -479,6 +479,10 @@ class Sync:
         # 403 ESPN returns for the parameter-less current-slate call.
         today = dt.datetime.now(dt.timezone.utc)
         window = f"{today:%Y%m%d}-{today + dt.timedelta(days=7):%Y%m%d}"
+        try:
+            self.espn.probe_boxscore(dates=window)  # TEMP
+        except Exception as exc:
+            log.warning("probe_boxscore errored: %s", exc)
         games = self.espn.fetch_nfl_scoreboard(dates=window)
         now = dt.datetime.now(dt.timezone.utc).isoformat()
         rows = [{**g, "season": self.espn.season, "synced_at": now} for g in games]

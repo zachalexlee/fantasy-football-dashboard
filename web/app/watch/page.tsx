@@ -36,7 +36,9 @@ function OptionRow({ o }: { o: WatchOption }) {
 
 export default async function Watch() {
   const bundle = await getBundle();
-  const games = bundle.nflGames;
+  // Only games you can still watch: live now or yet to kick off. Finished
+  // games ("post") drop off — their TV listings are useless once they're over.
+  const games = bundle.nflGames.filter((g) => g.status !== "post");
   const preseason = games.length > 0 && games.every((g) => g.seasonType === 1);
 
   return (

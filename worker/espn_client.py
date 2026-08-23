@@ -211,6 +211,26 @@ class EspnClient:
             })
         return games
 
+    def probe_boxscore(self, dates: str | None = None) -> None:
+        """TEMP: dump the box-score detail the scoreboard feed exposes for a
+        completed/live game so the Scores tab is built on real fields."""
+        import json as _json
+        sb = self._scoreboard_sbdata(dates)
+        for e in sb.get("events", []):
+            comp = (e.get("competitions") or [{}])[0]
+            st = e.get("status", {}).get("type", {}).get("state")
+            if st not in ("in", "post"):
+                continue
+            c0 = (comp.get("competitors") or [{}])[0]
+            log.info("PROBE box comp keys=%s", list(comp.keys()))
+            log.info("PROBE box competitor keys=%s", list(c0.keys()))
+            log.info("PROBE box linescores=%s", _json.dumps(c0.get("linescores"))[:300])
+            log.info("PROBE box leaders=%s", _json.dumps(c0.get("leaders"))[:900])
+            log.info("PROBE box statistics=%s", _json.dumps(c0.get("statistics"))[:600])
+            log.info("PROBE box records=%s", _json.dumps(c0.get("records") or c0.get("record"))[:300])
+            return
+        log.info("PROBE box: no in/post games in window")
+
     @staticmethod
     def _espn_video_id(href: str | None) -> str | None:
         """Pull the numeric clip id out of an ESPN video URL like
