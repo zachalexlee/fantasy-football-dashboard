@@ -13,6 +13,7 @@ from collections import defaultdict
 
 import analysis as analysis_mod
 import compute
+import highlightly_client
 import recap as recap_mod
 from db import Db
 from espn_client import (POSITION_BY_ID, PRO_TEAMS, SLOT_BY_ID, EspnClient,
@@ -484,6 +485,25 @@ class Sync:
         # Drop any prior slate (last week's games, or a stale season type).
         self.db.delete("nfl_games", f"espn_event_id=not.in.({keep})")
 
+    def fetch_highlights(self) -> None:
+        """NFL highlight clips from Highlightly (skipped when no API key)."""
+        if not highlightly_client.enabled():
+            return
+        client = highlightly_client.HighlightlyClient()
+        clips = client.fetch_highlights(self.espn.season)
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        rows = []
+        for c in clips:
+            row = highlightly_client.to_row(c, self.espn.season)
+            if row:
+                rows.append({**row, "synced_at": now})
+        if not rows:
+            return
+        keep = ",".join(f'"{r["provider_id"]}"' for r in rows)
+        self.db.upsert("game_highlights", rows, on_conflict="provider_id")
+        self.db.delete("game_highlights", f"provider_id=not.in.({keep})")
+        log.info("Stored %d highlight clips", len(rows))
+
     def write_game_analysis(self) -> None:
         """Gamecast writeups for every current-week matchup (throttled)."""
         lid = self.league_row["id"]
@@ -536,7 +556,7 @@ class Sync:
         self.fetch_transactions()
         self.fetch_draft()
         self.compute_all()
-        for step in (self.fetch_nfl, self.write_game_analysis):
+        for step in (self.fetch_nfl, self.write_game_analysis, self.fetch_highlights):
             try:  # gamecast extras never block the core sync
                 step()
             except Exception as exc:

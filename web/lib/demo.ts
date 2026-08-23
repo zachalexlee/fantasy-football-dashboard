@@ -390,6 +390,7 @@ function buildBundle(): Bundle {
     recaps,
     nflGames: [],
     gameAnalysis: [],
+    highlights: [],
     demo: true,
   };
 }

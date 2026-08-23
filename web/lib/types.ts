@@ -106,6 +106,18 @@ export type NflGame = {
   seasonType: number; // 1 preseason / 2 regular / 3 postseason
 };
 
+export type Highlight = {
+  providerId: string;
+  title: string;
+  url: string | null;
+  embedUrl: string | null;
+  thumbnailUrl: string | null;
+  source: string | null;
+  homeTeam: string | null;
+  awayTeam: string | null;
+  kind: string | null;
+};
+
 export type GameAnalysis = {
   week: number;
   homeTeamId: string;
@@ -141,5 +153,6 @@ export type Bundle = {
   recaps: Recap[];
   nflGames: NflGame[];
   gameAnalysis: GameAnalysis[];
+  highlights: Highlight[];
   demo: boolean;
 };

@@ -1,6 +1,6 @@
 import Markdown from "react-markdown";
 import MatchupCard from "@/components/MatchupCard";
-import TeamMark from "@/components/TeamMark";
+import Highlights from "@/components/Highlights";
 import AutoRefresh from "@/components/AutoRefresh";
 import { getBundle } from "@/lib/data";
 import { fmtPts } from "@/lib/format";
@@ -94,6 +94,8 @@ export default async function Live() {
           </div>
         </section>
       )}
+
+      <Highlights highlights={bundle.highlights} />
 
       <section className="space-y-4">
         {matchups.map((m) => {
