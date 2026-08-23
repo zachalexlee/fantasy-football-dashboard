@@ -20,7 +20,7 @@ import {
 } from "@/lib/stats";
 import type { SeasonSlice } from "@/lib/types";
 
-type SortCol = "team" | "seasons" | "titles" | "runnerUps" | "best" | "top5" | "playoffs" | "winpct" | "pf" | "pa";
+type SortCol = "team" | "seasons" | "titles" | "runnerUps" | "best" | "top5" | "playoffs" | "record" | "winpct" | "pf" | "pa";
 
 const SORTERS: Record<SortCol, (f: Franchise) => number | string> = {
   team: (f) => f.team.name.toLowerCase(),
@@ -30,6 +30,8 @@ const SORTERS: Record<SortCol, (f: Franchise) => number | string> = {
   best: (f) => f.bestFinish?.rank ?? 99,
   top5: (f) => f.top5,
   playoffs: (f) => f.playoffBerths,
+  // Wins first (ties count half); fewer losses breaks exact-win ties.
+  record: (f) => f.wins + f.ties * 0.5 - f.losses / 1000,
   winpct: (f) => winPct(f),
   pf: (f) => f.pointsFor,
   pa: (f) => f.pointsAgainst,
@@ -183,7 +185,7 @@ export default function HistoryView({ seasons }: { seasons: SeasonSlice[] }) {
                 {header("Best finish", "best")}
                 {header("Top-5s", "top5", "text-center")}
                 {header("Playoffs", "playoffs", "text-center")}
-                <th className="px-2 py-2.5">W-L-T</th>
+                {header("W-L-T", "record")}
                 {header("Win %", "winpct", "text-right")}
                 {header("Total PF", "pf", "text-right")}
                 {header("Total PA", "pa", "pr-3 text-right")}
