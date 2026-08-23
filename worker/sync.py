@@ -475,7 +475,11 @@ class Sync:
         """Current real NFL slate: scores, status, networks. ESPN's current
         scoreboard = preseason now, regular season once it starts. Old rows
         are dropped so the tab only ever shows what's on this window."""
-        games = self.espn.fetch_nfl_scoreboard()  # current slate
+        # A one-week window around today = "what's on now/soon"; avoids the
+        # 403 ESPN returns for the parameter-less current-slate call.
+        today = dt.datetime.now(dt.timezone.utc)
+        window = f"{today:%Y%m%d}-{today + dt.timedelta(days=7):%Y%m%d}"
+        games = self.espn.fetch_nfl_scoreboard(dates=window)
         now = dt.datetime.now(dt.timezone.utc).isoformat()
         rows = [{**g, "season": self.espn.season, "synced_at": now} for g in games]
         if not rows:

@@ -142,17 +142,19 @@ class EspnClient:
             data = data[0]
         return data.get("players", [])
 
-    def fetch_nfl_scoreboard(self, week: int | None = None) -> list[dict]:
-        """Real NFL games for the current slate (scores, status, broadcast
-        network) from ESPN's public site scoreboard API. With no week, ESPN
-        returns whatever is current — preseason in August, regular season once
-        it starts — so the dashboard always shows what's actually on."""
+    def fetch_nfl_scoreboard(self, dates: str | None = None,
+                             week: int | None = None) -> list[dict]:
+        """Real NFL games (scores, status, broadcast network) from ESPN's public
+        site scoreboard API. ESPN 403s the parameter-less "current" call from a
+        server, so pass a `dates` window (YYYYMMDD or YYYYMMDD-YYYYMMDD) — the
+        response still reports its own season type and week, so this shows
+        preseason in August and the regular season once it starts."""
         url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
         params: list[tuple[str, str]] = []
         if week is not None:
             params += [("seasontype", "2"), ("week", str(week)), ("dates", str(self.season))]
-        # ESPN's public scoreboard 403s the default sync UA on the bare call;
-        # a browser UA is accepted.
+        elif dates:
+            params.append(("dates", dates))
         data = self._get(url, params, headers={
             "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                            "AppleWebKit/537.36 (KHTML, like Gecko) "
