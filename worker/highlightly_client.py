@@ -91,6 +91,18 @@ class HighlightlyClient:
                      params, len(items), self._nfl_count(items))
             if items:
                 return items
+        # Nothing NFL. Probe unfiltered once so the logs show which
+        # American-football leagues Highlightly currently carries — this
+        # distinguishes "preseason: no NFL clips yet" from "plan/data gap".
+        try:
+            _, _, data = self._get("highlights", {"limit": self.LIMIT})
+            probe = self._items(data)
+            leagues = sorted({str(((c.get("match") or {}).get("league")) or "?")
+                              for c in probe if isinstance(c, dict)})
+            log.info("Highlightly unfiltered probe -> %d items, leagues=%s",
+                     len(probe), leagues)
+        except requests.RequestException as exc:
+            log.warning("Highlightly probe failed: %s", exc)
         return []  # no NFL clips available yet; caller clears any stale rows
 
 
