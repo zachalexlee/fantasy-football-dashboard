@@ -149,24 +149,34 @@ class EspnClient:
         server, so pass a `dates` window (YYYYMMDD or YYYYMMDD-YYYYMMDD) — the
         response still reports its own season type and week, so this shows
         preseason in August and the regular season once it starts."""
-        url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
         params: list[tuple[str, str]] = []
         if week is not None:
             params += [("seasontype", "2"), ("week", str(week)), ("dates", str(self.season))]
         elif dates:
             params.append(("dates", dates))
-        data = self._get(url, params, headers={
+        headers = {
             "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                            "AppleWebKit/537.36 (KHTML, like Gecko) "
                            "Chrome/125.0 Safari/537.36"),
             "Accept": "application/json, text/plain, */*",
             "Referer": "https://www.espn.com/nfl/scoreboard",
-            "Origin": "https://www.espn.com",
-        })
-        season_type = data.get("season", {}).get("type", 2)
-        real_week = data.get("week", {}).get("number", week or 1)
+        }
+        # site.api WAF-blocks the server IP (403); the CDN core endpoint runs on
+        # different infra and returns the same event shape under content.sbData.
+        sb = {}
+        site_url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+        try:
+            sb = self._get(site_url, params, headers=headers)
+        except requests.HTTPError as exc:
+            log.warning("site.api scoreboard failed (%s); falling back to CDN", exc)
+            cdn_url = "https://cdn.espn.com/core/nfl/scoreboard"
+            data = self._get(cdn_url, [("xhr", "1")] + params, headers=headers)
+            sb = (data.get("content", {}) or {}).get("sbData", {}) if isinstance(data, dict) else {}
+
+        season_type = sb.get("season", {}).get("type", 2)
+        real_week = sb.get("week", {}).get("number", week or 1)
         games = []
-        for event in data.get("events", []):
+        for event in sb.get("events", []):
             comp = (event.get("competitions") or [{}])[0]
             sides = {c.get("homeAway"): c for c in comp.get("competitors", [])}
             home, away = sides.get("home", {}), sides.get("away", {})
