@@ -491,18 +491,23 @@ class Sync:
             return
         client = highlightly_client.HighlightlyClient()
         clips = client.fetch_highlights(self.espn.season)
+        if clips is None:
+            return  # request error — keep last-good data
         now = dt.datetime.now(dt.timezone.utc).isoformat()
         rows = []
         for c in clips:
             row = highlightly_client.to_row(c, self.espn.season)
             if row:
                 rows.append({**row, "synced_at": now})
-        if not rows:
-            return
-        keep = ",".join(f'"{r["provider_id"]}"' for r in rows)
-        self.db.upsert("game_highlights", rows, on_conflict="provider_id")
-        self.db.delete("game_highlights", f"provider_id=not.in.({keep})")
-        log.info("Stored %d highlight clips", len(rows))
+        if rows:
+            keep = ",".join(f'"{r["provider_id"]}"' for r in rows)
+            self.db.upsert("game_highlights", rows, on_conflict="provider_id")
+            self.db.delete("game_highlights", f"provider_id=not.in.({keep})")
+        else:
+            # Fetched fine but no NFL clips right now — clear any stale rows
+            # (e.g. leftover college clips) so the reel isn't misleading.
+            self.db.delete("game_highlights", "provider_id=neq.__none__")
+        log.info("Stored %d NFL highlight clips", len(rows))
 
     def write_game_analysis(self) -> None:
         """Gamecast writeups for every current-week matchup (throttled)."""

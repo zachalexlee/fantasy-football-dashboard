@@ -55,20 +55,46 @@ class HighlightlyClient:
         except ValueError:
             return resp.status_code, body, None
 
-    def fetch_highlights(self, season: int, limit: int = 100) -> list[dict]:
-        """Recent NFL highlight clips. The american-football endpoint mixes NFL
-        and NCAA, so we over-fetch and let the caller keep NFL. Returns the raw
-        list; mapping is done by the caller so the raw payload is preserved."""
-        status, body, data = self._get("highlights", {"limit": limit})
-        items = []
+    @staticmethod
+    def _items(data: object) -> list:
         if isinstance(data, dict):
-            items = data.get("data") or data.get("highlights") or data.get("results") or []
-        elif isinstance(data, list):
-            items = data
-        if not items:
-            log.warning("Highlightly returned no highlights (status %d). "
-                        "Response head: %s", status, body[:600])
-        return items
+            return data.get("data") or data.get("highlights") or data.get("results") or []
+        return data if isinstance(data, list) else []
+
+    def nfl_league_id(self) -> int | None:
+        """Resolve the NFL league id so highlights can be filtered server-side
+        (the endpoint otherwise mixes in NCAA). Cached per process."""
+        if getattr(self, "_nfl_id", "unset") != "unset":
+            return self._nfl_id
+        self._nfl_id = None
+        try:
+            _, _, data = self._get("leagues", {"limit": 100})
+            for lg in self._items(data):
+                if isinstance(lg, dict) and str(lg.get("name", "")).upper() == "NFL":
+                    self._nfl_id = lg.get("id")
+                    log.info("Highlightly NFL league id = %s", self._nfl_id)
+                    break
+            if self._nfl_id is None:
+                log.warning("Highlightly: NFL not found in leagues list")
+        except requests.RequestException as exc:
+            log.warning("Highlightly leagues lookup failed: %s", exc)
+        return self._nfl_id
+
+    def fetch_highlights(self, season: int, limit: int = 60) -> list[dict] | None:
+        """NFL highlight clips, filtered to the NFL league server-side when the
+        id resolves. Returns the raw list (possibly empty) on success, or None
+        on a request error so the caller can keep last-good data."""
+        params: dict = {"limit": limit}
+        lid = self.nfl_league_id()
+        if lid is not None:
+            params["leagueId"] = lid
+            params["season"] = season
+        try:
+            _, _, data = self._get("highlights", params)
+        except requests.RequestException as exc:
+            log.warning("Highlightly highlights fetch failed: %s", exc)
+            return None
+        return self._items(data)
 
 
 # --- Mapping (verify against game_highlights.raw after first sync) -----------
