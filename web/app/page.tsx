@@ -43,6 +43,7 @@ export default async function Home({
               home={team(m.homeTeamId)!}
               away={team(m.awayTeamId)}
               live={live && !m.isFinal}
+              href={m.awayTeamId ? `/matchup/${m.homeTeamId}?week=${week}` : undefined}
             />
           ))}
           {!weekMatchups.length && (

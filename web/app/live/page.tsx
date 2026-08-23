@@ -106,7 +106,13 @@ export default async function Live() {
           return (
             <div key={m.id} className="grid gap-3 lg:grid-cols-5">
               <div className="lg:col-span-2">
-                <MatchupCard matchup={m} home={home} away={away} live={live} />
+                <MatchupCard
+                  matchup={m}
+                  home={home}
+                  away={away}
+                  live={live}
+                  href={away ? `/matchup/${m.homeTeamId}?week=${week}` : undefined}
+                />
               </div>
               <div className="card p-4 lg:col-span-3">
                 <div className="mb-1.5 flex items-center justify-between">

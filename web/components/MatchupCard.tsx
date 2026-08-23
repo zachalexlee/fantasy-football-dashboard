@@ -1,3 +1,4 @@
+import Link from "next/link";
 import TeamMark from "./TeamMark";
 import { fmtPts, record } from "@/lib/format";
 import { winProbability } from "@/lib/stats";
@@ -47,11 +48,13 @@ export default function MatchupCard({
   home,
   away,
   live,
+  href,
 }: {
   matchup: Matchup;
   home: Team;
   away: Team | undefined;
   live: boolean;
+  href?: string;
 }) {
   if (!away)
     return (
@@ -63,8 +66,10 @@ export default function MatchupCard({
   const prob = live ? winProbability(matchup) : null;
   const homeWon = matchup.isFinal && matchup.winnerId === home.id;
   const awayWon = matchup.isFinal && matchup.winnerId === away.id;
+  const Card = href ? Link : "div";
+  const cardProps = href ? { href } : {};
   return (
-    <div className="card p-3">
+    <Card {...(cardProps as { href: string })} className={`card block p-3 ${href ? "hover:border-accent" : ""}`}>
       {live && (
         <div className="mb-1 flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-good" aria-hidden />
@@ -89,6 +94,6 @@ export default function MatchupCard({
           </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
