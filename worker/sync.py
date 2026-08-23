@@ -11,6 +11,7 @@ import logging
 import os
 from collections import defaultdict
 
+import analysis as analysis_mod
 import compute
 import recap as recap_mod
 from db import Db
@@ -469,6 +470,51 @@ class Sync:
                 "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             }], on_conflict="league_id,week")
 
+    def fetch_nfl(self) -> None:
+        """Real NFL slate for the current week: scores, status, networks."""
+        games = self.espn.fetch_nfl_scoreboard(self.current_week)
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        rows = [{**g, "season": self.espn.season, "week": self.current_week,
+                 "synced_at": now} for g in games]
+        self.db.upsert("nfl_games", rows, on_conflict="espn_event_id")
+
+    def write_game_analysis(self) -> None:
+        """Gamecast writeups for every current-week matchup (throttled)."""
+        lid = self.league_row["id"]
+        week = self.current_week
+        matchups = self.db.select(
+            "matchups", f"select=*&league_id=eq.{lid}&week=eq.{week}")
+        matchups = [m for m in matchups if m.get("away_team_id")]
+        if not matchups:
+            return
+        teams = {t["id"]: t for t in self.db.select("teams", f"select=*&league_id=eq.{lid}")}
+        team_ids = ",".join(f'"{t}"' for t in teams)
+        week_slots = self.db.select(
+            "roster_slots", f"select=*&week=eq.{week}&team_id=in.({team_ids})")
+        players = {p["id"]: p for p in self.db.select("players", "select=id,name,position")}
+        existing = {r["home_team_id"]: r for r in self.db.select(
+            "game_analysis", f"select=*&league_id=eq.{lid}&week=eq.{week}")}
+
+        now = dt.datetime.now(dt.timezone.utc)
+        rows = []
+        for m in matchups:
+            state = analysis_mod.matchup_state(m)
+            if not analysis_mod.needs_refresh(existing.get(m["home_team_id"]), state, now):
+                continue
+            ctx = analysis_mod.build_context(m, teams, week_slots, players)
+            rows.append({
+                "league_id": lid,
+                "week": week,
+                "home_team_id": m["home_team_id"],
+                "state": state,
+                "markdown": analysis_mod.build_analysis(ctx),
+                "generated_at": now.isoformat(),
+            })
+        if rows:
+            self.db.upsert("game_analysis", rows,
+                           on_conflict="league_id,week,home_team_id")
+            log.info("Wrote %d gamecast writeups", len(rows))
+
     @staticmethod
     def _last_final_week(matchups: list[dict]) -> int:
         finals = [m["week"] for m in matchups if m["is_final"] and not m["is_playoff"]]
@@ -484,6 +530,11 @@ class Sync:
         self.fetch_transactions()
         self.fetch_draft()
         self.compute_all()
+        for step in (self.fetch_nfl, self.write_game_analysis):
+            try:  # gamecast extras never block the core sync
+                step()
+            except Exception as exc:
+                log.warning("%s failed: %s", step.__name__, exc)
         self.db.update("leagues", f"id=eq.{self.league_row['id']}",
                        {"synced_at": dt.datetime.now(dt.timezone.utc).isoformat()})
         log.info("Sync complete (week %d)", self.current_week)

@@ -142,6 +142,34 @@ class EspnClient:
             data = data[0]
         return data.get("players", [])
 
+    def fetch_nfl_scoreboard(self, week: int) -> list[dict]:
+        """Real NFL games for a week (scores, status, broadcast network) from
+        ESPN's public site scoreboard API. Normalized to plain dicts."""
+        url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+        data = self._get(url, [("seasontype", "2"), ("week", str(week)),
+                               ("dates", str(self.season))])
+        games = []
+        for event in data.get("events", []):
+            comp = (event.get("competitions") or [{}])[0]
+            sides = {c.get("homeAway"): c for c in comp.get("competitors", [])}
+            home, away = sides.get("home", {}), sides.get("away", {})
+            status = event.get("status", {}).get("type", {})
+            broadcasts = comp.get("broadcasts") or []
+            network = (broadcasts[0].get("names") or [None])[0] if broadcasts else None
+            games.append({
+                "espn_event_id": str(event.get("id")),
+                "kickoff": event.get("date"),
+                "short_name": event.get("shortName", ""),
+                "home_abbrev": home.get("team", {}).get("abbreviation", ""),
+                "away_abbrev": away.get("team", {}).get("abbreviation", ""),
+                "home_score": int(home.get("score") or 0),
+                "away_score": int(away.get("score") or 0),
+                "status": status.get("state", "pre"),
+                "status_detail": status.get("shortDetail"),
+                "network": network,
+            })
+        return games
+
     def fetch_history(self, season: int, views: list[str]) -> dict:
         """Prior seasons. 2018+ live on the normal per-season endpoint;
         only pre-2018 seasons use leagueHistory (which 404s for newer ones)."""

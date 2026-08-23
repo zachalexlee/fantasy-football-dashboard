@@ -92,6 +92,27 @@ export type Stat = {
   value: number;
 };
 
+export type NflGame = {
+  espnEventId: string;
+  kickoff: string | null;
+  shortName: string;
+  homeAbbrev: string;
+  awayAbbrev: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  status: string; // pre / in / post
+  statusDetail: string | null;
+  network: string | null;
+};
+
+export type GameAnalysis = {
+  week: number;
+  homeTeamId: string;
+  state: string; // pre / live / final
+  markdown: string;
+  generatedAt: string;
+};
+
 export type Recap = {
   week: number;
   markdown: string;
@@ -117,5 +138,7 @@ export type Bundle = {
   draftPicks: DraftPick[];
   stats: Stat[];
   recaps: Recap[];
+  nflGames: NflGame[];
+  gameAnalysis: GameAnalysis[];
   demo: boolean;
 };

@@ -388,6 +388,8 @@ function buildBundle(): Bundle {
     draftPicks,
     stats,
     recaps,
+    nflGames: [],
+    gameAnalysis: [],
     demo: true,
   };
 }

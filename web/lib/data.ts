@@ -80,7 +80,7 @@ async function supabaseBundle(): Promise<Bundle | null> {
   if (!leagues.length) return null; // nothing synced yet — caller falls back to demo
   const lid = (leagues[0] as any).id as string;
 
-  const [allTeams, allMatchups, players, rosterSlots, transactions, draftPicks, stats, recaps] =
+  const [allTeams, allMatchups, players, rosterSlots, transactions, draftPicks, stats, recaps, nflGames, gameAnalysis] =
     await Promise.all([
       rest(`teams?select=*`),
       rest(`matchups?select=*&order=week`),
@@ -90,6 +90,8 @@ async function supabaseBundle(): Promise<Bundle | null> {
       rest(`draft_picks?select=*&league_id=eq.${lid}&order=pick`),
       rest(`computed_stats?select=*&league_id=eq.${lid}`),
       rest(`recaps?select=*&league_id=eq.${lid}&order=week`),
+      rest(`nfl_games?select=*&season=eq.${(leagues[0] as any).season}&week=eq.${(leagues[0] as any).current_week}&order=kickoff`),
+      rest(`game_analysis?select=*&league_id=eq.${lid}&week=eq.${(leagues[0] as any).current_week}`),
     ]);
 
   const seasons: SeasonSlice[] = (leagues as any[]).map((lg) => ({
@@ -154,6 +156,25 @@ async function supabaseBundle(): Promise<Bundle | null> {
       week: r.week,
       markdown: r.markdown,
       generatedAt: r.generated_at,
+    })),
+    nflGames: (nflGames as any[]).map((g) => ({
+      espnEventId: g.espn_event_id,
+      kickoff: g.kickoff,
+      shortName: g.short_name,
+      homeAbbrev: g.home_abbrev,
+      awayAbbrev: g.away_abbrev,
+      homeScore: g.home_score,
+      awayScore: g.away_score,
+      status: g.status,
+      statusDetail: g.status_detail,
+      network: g.network,
+    })),
+    gameAnalysis: (gameAnalysis as any[]).map((g) => ({
+      week: g.week,
+      homeTeamId: g.home_team_id,
+      state: g.state,
+      markdown: g.markdown,
+      generatedAt: g.generated_at,
     })),
     demo: false,
   };
