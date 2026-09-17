@@ -19,7 +19,12 @@ async function rest(path: string): Promise<Record<string, unknown>[]> {
         Authorization: `Bearer ${KEY}`,
         Range: `${offset}-${offset + page - 1}`,
       },
-      next: { revalidate: 60 },
+      // Always read live from Supabase. With `revalidate`, Next's data cache
+      // serves the last snapshot on the first request after expiry
+      // (stale-while-revalidate) — on a low-traffic dashboard that surfaces as
+      // "synced Nd ago". getBundle() is still React-cached per request, so this
+      // is one fresh read per table per page load, not per component.
+      cache: "no-store",
     });
     if (!res.ok) throw new Error(`Supabase ${path}: ${res.status}`);
     const batch = (await res.json()) as Record<string, unknown>[];
